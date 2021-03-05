@@ -415,6 +415,8 @@ public:
       FeatureMap& features
     );
 
+    void store(const String& filename, MSExperiment& experiment) const;
+
 protected:
     /// Overridden function from DefaultParamHandler to keep members up to date, when a parameter is changed
     void updateMembers_() override;
@@ -488,5 +490,24 @@ private:
 
     /// Minimum score for a match to be considered valid in `matchSpectrum()`.
     double min_match_score_;
+
+    String output_format_;
+
+    int min_transitions_;
+    int max_transitions_;
+    double cosine_similarity_threshold_;
+    int transition_threshold_;
+    double min_fragment_mz_;
+    double max_fragment_mz_;
+
+    bool deisotoping_use_deisotoper_;
+    double deisotoping_fragment_tolerance_;
+    String deisotoping_fragment_unit_;
+    int deisotoping_min_charge_;
+    int deisotoping_max_charge_;
+    int deisotoping_min_isopeaks_;
+    int deisotoping_max_isopeaks_;
+    bool deisotoping_keep_only_deisotoped_;
+    bool deisotoping_annotate_charge_;
   };
 }

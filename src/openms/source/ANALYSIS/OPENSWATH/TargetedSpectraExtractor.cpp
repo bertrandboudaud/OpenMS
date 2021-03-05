@@ -39,6 +39,7 @@
 #include <OpenMS/FILTERING/SMOOTHING/GaussFilter.h>
 #include <OpenMS/FILTERING/SMOOTHING/SavitzkyGolayFilter.h>
 #include <OpenMS/TRANSFORMATIONS/RAW2PEAK/PeakPickerHiRes.h>
+#include <OpenMS/FORMAT/MSPGenericFile.h>
 
 namespace OpenMS
 {
@@ -75,6 +76,25 @@ namespace OpenMS
     snr_weight_ = (double)param_.getValue("snr_weight");
     top_matches_to_report_ = (Size)param_.getValue("top_matches_to_report");
     min_match_score_ = (double)param_.getValue("min_match_score");
+    
+    output_format_ = param_.getValue("output_format");
+
+    min_transitions_ = param_.getValue("min_transitions");
+    max_transitions_ = param_.getValue("max_transitions");
+    cosine_similarity_threshold_ = (double) param_.getValue("cosine_similarity_threshold");
+    transition_threshold_ = param_.getValue("transition_threshold");
+    min_fragment_mz_ = (double) param_.getValue("min_fragment_mz");
+    max_fragment_mz_ = (double) param_.getValue("max_fragment_mz");
+
+    deisotoping_use_deisotoper_ = param_.getValue("deisotoping:use_deisotoper").toBool();
+    deisotoping_fragment_tolerance_ = (double) param_.getValue("deisotoping:fragment_tolerance");
+    deisotoping_fragment_unit_ = param_.getValue("deisotoping:fragment_unit");
+    deisotoping_min_charge_ = param_.getValue("deisotoping:min_charge");
+    deisotoping_max_charge_ = param_.getValue("deisotoping:max_charge");
+    deisotoping_min_isopeaks_ = param_.getValue("deisotoping:min_isopeaks");
+    deisotoping_max_isopeaks_ = param_.getValue("deisotoping:max_isopeaks");
+    deisotoping_keep_only_deisotoped_ = param_.getValue("deisotoping:keep_only_deisotoped").toBool();
+    deisotoping_annotate_charge_ = param_.getValue("deisotoping:annotate_charge").toBool();
   }
 
   void TargetedSpectraExtractor::getDefaultParameters(Param& params) const
@@ -146,6 +166,31 @@ namespace OpenMS
     );
     params.setMinFloat("min_match_score", 0.0);
     params.setMaxFloat("min_match_score", 1.0);
+
+    params.setValue("output_format", "msp", "Use Gaussian filter for smoothing (alternative is Savitzky-Golay filter)");
+    params.setValidStrings("output_format", ListUtils::create<String>("msp,traML"));
+
+    params.setValue("min_transitions", 3, "Minimal number of transitions");
+    params.setValue("max_transitions", 6, "Maximal number of transitions");
+    params.setValue("cosine_similarity_threshold", 0.98, "Threshold for cosine similarity of MS2 spectra from the same precursor used in consensus spectrum creation");
+    params.setValue("transition_threshold", 5, "Further transitions need at least x% of the maximum intensity (default 5%)");
+    params.setValue("min_fragment_mz", 0.0, "Minimal m/z of a fragment ion choosen as a transition");
+    params.setValue("max_fragment_mz", 2000.0, "Maximal m/z of a fragment ion choosen as a transition");
+
+    params.setValue("deisotoping:use_deisotoper", false, "Use Deisotoper (if no fragment annotation is used)");
+    params.setValue("deisotoping:fragment_tolerance", 1.0, "Tolerance used to match isotopic peaks");
+    params.setValue("deisotoping:fragment_unit", "ppm", "Unit of the fragment tolerance");
+    params.setValidStrings("deisotoping:fragment_unit", ListUtils::create<String>("ppm,Da"));
+    params.setValue("deisotoping:min_charge", 1, "The minimum charge considered");
+    params.setMinInt("deisotoping : min_charge ", 1);
+    params.setValue("deisotoping:max_charge", 1, "The maximum charge considered");
+    params.setMinInt("deisotoping:max_charge", 1);
+    params.setValue("deisotoping:min_isopeaks", 2, "The minimum number of isotopic peaks (at least 2) required for an isotopic cluster");
+    params.setMinInt("deisotoping:min_isopeaks", 2);
+    params.setValue("deisotoping:max_isopeaks", 3, "The maximum number of isotopic peaks (at least 2) considered for an isotopic cluster");
+    params.setMinInt("deisotoping:max_isopeaks", 3);
+    params.setValue("deisotoping:keep_only_deisotoped", false, "Only monoisotopic peaks of fragments with isotopic pattern are retained");
+    params.setValue("deisotoping:annotate_charge", false, "Annotate the charge to the peaks");
   }
 
   void TargetedSpectraExtractor::annotateSpectra(
@@ -610,4 +655,21 @@ namespace OpenMS
 
     targetedMatching(picked, cmp, features);
   }
-}
+
+  void TargetedSpectraExtractor::store(const String& filename, MSExperiment& experiment) const
+  {
+    if (output_format_ == "msp")
+    {
+      MSPGenericFile msp_file;
+      msp_file.store(filename, experiment);
+    }
+    else if (output_format_ == "traML")
+    {
+    }
+    else
+    {
+      // throw Exception::InvalidParameter(__FILE__, __LINE__, OPENMS_PRETTY_FUNCTION, String("Unsupported output file format " + output_format_));
+    }
+  }
+
+}// namespace OpenMS

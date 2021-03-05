@@ -415,7 +415,7 @@ public:
       FeatureMap& features
     );
 
-    void store(const String& filename, MSExperiment& experiment) const;
+    void storeSpectra(const String& filename, MSExperiment& experiment) const;
 
 protected:
     /// Overridden function from DefaultParamHandler to keep members up to date, when a parameter is changed
@@ -509,5 +509,13 @@ private:
     int deisotoping_max_isopeaks_;
     bool deisotoping_keep_only_deisotoped_;
     bool deisotoping_annotate_charge_;
+
+    bool use_exact_mass_;
+    bool exclude_ms2_precursor_;
+
+    double precursor_mz_distance_;
+    double consensus_spectrum_precursor_rt_tolerance_;
+
+    String method_;
   };
 }

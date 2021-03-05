@@ -40,6 +40,12 @@
 #include <OpenMS/FILTERING/SMOOTHING/SavitzkyGolayFilter.h>
 #include <OpenMS/TRANSFORMATIONS/RAW2PEAK/PeakPickerHiRes.h>
 #include <OpenMS/FORMAT/MSPGenericFile.h>
+#include <OpenMS/FORMAT/TraMLFile.h>
+#include <OpenMS/FILTERING/DATAREDUCTION/Deisotoper.h>
+#include <OpenMS/ANALYSIS/TARGETED/MetaboTargetedAssay.h>
+#include <OpenMS/ANALYSIS/OPENSWATH/MRMAssay.h>
+#include <OpenMS/KERNEL/RangeUtils.h>
+#include <OpenMS/ANALYSIS/OPENSWATH/TransitionPQPFile.h>
 
 namespace OpenMS
 {
@@ -95,6 +101,14 @@ namespace OpenMS
     deisotoping_max_isopeaks_ = param_.getValue("deisotoping:max_isopeaks");
     deisotoping_keep_only_deisotoped_ = param_.getValue("deisotoping:keep_only_deisotoped").toBool();
     deisotoping_annotate_charge_ = param_.getValue("deisotoping:annotate_charge").toBool();
+
+    use_exact_mass_ = param_.getValue("use_exact_mass").toBool();
+    exclude_ms2_precursor_ = param_.getValue("exclude_ms2_precursor").toBool();
+
+    precursor_mz_distance_ = (double)param_.getValue("precursor_mz_distance_");
+    consensus_spectrum_precursor_rt_tolerance_ = (double)param_.getValue("consensus_spectrum_precursor_rt_tolerance_");
+
+    method_ = param_.getValue("method");
   }
 
   void TargetedSpectraExtractor::getDefaultParameters(Param& params) const
@@ -191,6 +205,15 @@ namespace OpenMS
     params.setMinInt("deisotoping:max_isopeaks", 3);
     params.setValue("deisotoping:keep_only_deisotoped", false, "Only monoisotopic peaks of fragments with isotopic pattern are retained");
     params.setValue("deisotoping:annotate_charge", false, "Annotate the charge to the peaks");
+
+    params.setValue("use_exact_mass", false, "Use exact mass for precursor and fragment annotations");
+    params.setValue("exclude_ms2_precursor", false, "Excludes precursor in ms2 from transition list");
+
+    params.setValue("precursor_mz_distance", 0.0001, "Max m/z distance of the precursor entries of two spectra to be merged in [Da].");
+    params.setValue("consensus_spectrum_precursor_rt_tolerance", 5, "Tolerance window (left and right) for precursor selection [seconds], for consensus spectrum generation (only available without fragment annotation)");
+
+    params.setValue("method", "highest_intensity", "Spectrum with the highest precursor intensity or a consensus spectrum ist used for assay library construction (if no fragment annotation is used).");
+    params.setValidStrings("output_format", ListUtils::create<String>("highest_intensity,consensus_spectrum"));
   }
 
   void TargetedSpectraExtractor::annotateSpectra(
@@ -656,8 +679,66 @@ namespace OpenMS
     targetedMatching(picked, cmp, features);
   }
 
-  void TargetedSpectraExtractor::store(const String& filename, MSExperiment& experiment) const
+  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment) const
   {
+    if (deisotoping_use_deisotoper_)
+    {
+      bool make_single_charged = false;
+      for (auto& peakmap_it : experiment.getSpectra())
+      {
+        MSSpectrum& spectrum = peakmap_it;
+        if (spectrum.getMSLevel() == 1)
+        {
+          continue;
+        }
+        else
+        {
+          bool fragment_unit_ppm = deisotoping_fragment_unit_ == "ppm" ? true : false;
+          Deisotoper::deisotopeAndSingleCharge(spectrum,
+                                               deisotoping_fragment_tolerance_,
+                                               fragment_unit_ppm,
+                                               deisotoping_min_charge_,
+                                               deisotoping_max_charge_,
+                                               deisotoping_keep_only_deisotoped_,
+                                               deisotoping_min_isopeaks_,
+                                               deisotoping_max_isopeaks_,
+                                               make_single_charged,
+                                               deisotoping_annotate_charge_);
+        }
+      }
+    }
+
+    // TODO should we do this ? ========================================================
+    // remove peaks form MS2 which are at a higher mz than the precursor + 10 ppm
+    for (auto& peakmap_it : experiment.getSpectra())
+    {
+      MSSpectrum& spectrum = peakmap_it;
+      if (spectrum.getMSLevel() == 1)
+      {
+        continue;
+      }
+      else
+      {
+        // if peak mz higher than precursor mz set intensity to zero
+        double prec_mz = spectrum.getPrecursors()[0].getMZ();
+        double mass_diff = Math::ppmToMass(10.0, prec_mz);
+        for (auto& spec : spectrum)
+        {
+          if (spec.getMZ() > prec_mz + mass_diff)
+          {
+            spec.setIntensity(0);
+          }
+        }
+        spectrum.erase(remove_if(spectrum.begin(),
+                                 spectrum.end(),
+                                 InIntensityRange<PeakMap::PeakType>(1,
+                                                                     std::numeric_limits<PeakMap::PeakType::IntensityType>::max(),
+                                                                     true)),
+                       spectrum.end());
+      }
+    }
+    //========================================================
+
     if (output_format_ == "msp")
     {
       MSPGenericFile msp_file;
@@ -665,10 +746,80 @@ namespace OpenMS
     }
     else if (output_format_ == "traML")
     {
+      // construct TargetedExperiment
+      TargetedExperiment t_exp;
+
+      // potential transitions of one file
+      std::vector<MetaboTargetedAssay> v_mta;
+      int file_counter = 0;
+
+      bool method_consensus_spectrum = method_ == "consensus_spectrum" ? true : false;
+      FeatureMapping::FeatureToMs2Indices feature_mapping;// reference to *basefeature in vector<FeatureMap>
+      v_mta = MetaboTargetedAssay::extractMetaboTargetedAssay(experiment,
+                                                                feature_mapping,
+                                                                consensus_spectrum_precursor_rt_tolerance_,
+                                                                precursor_mz_distance_,
+                                                                cosine_similarity_threshold_,
+                                                                transition_threshold_,
+                                                                min_fragment_mz_,
+                                                                max_fragment_mz_,
+                                                                method_consensus_spectrum,
+                                                                exclude_ms2_precursor_,
+                                                                file_counter);
+
+      // use first rank based on precursor intensity
+      std::map<std::pair<String, String>, MetaboTargetedAssay> map_mta;
+      for (const auto& it : v_mta)
+      {
+        std::pair<String, String> pair_mta = make_pair(it.compound_name, it.compound_adduct);
+
+        // check if value in map with key k does not exists and fill with current pair
+        if (map_mta.count(pair_mta) == 0)
+        {
+          map_mta[pair_mta] = it;
+        }
+        else
+        {
+          // check which on has the higher intensity precursor and if replace the current value
+          double map_precursor_int = map_mta.at(pair_mta).precursor_int;
+          double current_precursor_int = it.precursor_int;
+          if (map_precursor_int < current_precursor_int)
+          {
+            map_mta[pair_mta] = it;
+          }
+        }
+      }
+
+      // merge possible transitions
+      std::vector<TargetedExperiment::Compound> v_cmp;
+      std::vector<ReactionMonitoringTransition> v_rmt_all;
+      for (const auto& it : map_mta)
+      {
+        v_cmp.push_back(it.second.potential_cmp);
+        v_rmt_all.insert(v_rmt_all.end(), it.second.potential_rmts.begin(), it.second.potential_rmts.end());
+      }
+
+      // convert possible transitions to TargetedExperiment
+      t_exp.setCompounds(v_cmp);
+      t_exp.setTransitions(v_rmt_all);
+
+      // use MRMAssay methods for filtering
+      MRMAssay assay;
+
+      // filter: min/max transitions
+      assay.detectingTransitionsCompound(t_exp, min_transitions_, max_transitions_);
+
+      // validate
+      OpenMS::TransitionTSVFile tsv_file;
+      tsv_file.validateTargetedExperiment(t_exp);
+
+      // write traML
+      TraMLFile traml_file;
+      traml_file.store(filename, t_exp);
     }
     else
     {
-      // throw Exception::InvalidParameter(__FILE__, __LINE__, OPENMS_PRETTY_FUNCTION, String("Unsupported output file format " + output_format_));
+      throw Exception::InvalidParameter(__FILE__, __LINE__, OPENMS_PRETTY_FUNCTION, String("Unsupported output file format " + output_format_));
     }
   }
 

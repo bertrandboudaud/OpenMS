@@ -105,8 +105,8 @@ namespace OpenMS
     use_exact_mass_ = param_.getValue("use_exact_mass").toBool();
     exclude_ms2_precursor_ = param_.getValue("exclude_ms2_precursor").toBool();
 
-    precursor_mz_distance_ = (double)param_.getValue("precursor_mz_distance_");
-    consensus_spectrum_precursor_rt_tolerance_ = (double)param_.getValue("consensus_spectrum_precursor_rt_tolerance_");
+    precursor_mz_distance_ = (double)param_.getValue("precursor_mz_distance");
+    consensus_spectrum_precursor_rt_tolerance_ = (double)param_.getValue("consensus_spectrum_precursor_rt_tolerance");
 
     method_ = param_.getValue("method");
   }
@@ -191,29 +191,29 @@ namespace OpenMS
     params.setValue("min_fragment_mz", 0.0, "Minimal m/z of a fragment ion choosen as a transition");
     params.setValue("max_fragment_mz", 2000.0, "Maximal m/z of a fragment ion choosen as a transition");
 
-    params.setValue("deisotoping:use_deisotoper", false, "Use Deisotoper (if no fragment annotation is used)");
+    params.setValue("deisotoping:use_deisotoper", "false", "Use Deisotoper (if no fragment annotation is used)");
     params.setValue("deisotoping:fragment_tolerance", 1.0, "Tolerance used to match isotopic peaks");
     params.setValue("deisotoping:fragment_unit", "ppm", "Unit of the fragment tolerance");
     params.setValidStrings("deisotoping:fragment_unit", ListUtils::create<String>("ppm,Da"));
     params.setValue("deisotoping:min_charge", 1, "The minimum charge considered");
-    params.setMinInt("deisotoping : min_charge ", 1);
+    params.setMinInt("deisotoping:min_charge", 1);
     params.setValue("deisotoping:max_charge", 1, "The maximum charge considered");
     params.setMinInt("deisotoping:max_charge", 1);
     params.setValue("deisotoping:min_isopeaks", 2, "The minimum number of isotopic peaks (at least 2) required for an isotopic cluster");
     params.setMinInt("deisotoping:min_isopeaks", 2);
     params.setValue("deisotoping:max_isopeaks", 3, "The maximum number of isotopic peaks (at least 2) considered for an isotopic cluster");
     params.setMinInt("deisotoping:max_isopeaks", 3);
-    params.setValue("deisotoping:keep_only_deisotoped", false, "Only monoisotopic peaks of fragments with isotopic pattern are retained");
-    params.setValue("deisotoping:annotate_charge", false, "Annotate the charge to the peaks");
+    params.setValue("deisotoping:keep_only_deisotoped", "false", "Only monoisotopic peaks of fragments with isotopic pattern are retained");
+    params.setValue("deisotoping:annotate_charge", "false", "Annotate the charge to the peaks");
 
-    params.setValue("use_exact_mass", false, "Use exact mass for precursor and fragment annotations");
-    params.setValue("exclude_ms2_precursor", false, "Excludes precursor in ms2 from transition list");
+    params.setValue("use_exact_mass", "false", "Use exact mass for precursor and fragment annotations");
+    params.setValue("exclude_ms2_precursor", "false", "Excludes precursor in ms2 from transition list");
 
     params.setValue("precursor_mz_distance", 0.0001, "Max m/z distance of the precursor entries of two spectra to be merged in [Da].");
     params.setValue("consensus_spectrum_precursor_rt_tolerance", 5, "Tolerance window (left and right) for precursor selection [seconds], for consensus spectrum generation (only available without fragment annotation)");
 
     params.setValue("method", "highest_intensity", "Spectrum with the highest precursor intensity or a consensus spectrum ist used for assay library construction (if no fragment annotation is used).");
-    params.setValidStrings("output_format", ListUtils::create<String>("highest_intensity,consensus_spectrum"));
+    params.setValidStrings("method", ListUtils::create<String>("highest_intensity,consensus_spectrum"));
   }
 
   void TargetedSpectraExtractor::annotateSpectra(

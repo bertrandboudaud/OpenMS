@@ -116,7 +116,7 @@ Param tsv_params = tsv_reader.getParameters();
 tsv_params.setValue("retentionTimeInterpretation", "minutes");
 tsv_reader.setParameters(tsv_params);
 tsv_reader.convertTSVToTargetedExperiment(target_list_path.c_str(), FileTypes::CSV, targeted_exp);
-
+/*
 START_SECTION(TargetedSpectraExtractor())
 {
   ptr = new TargetedSpectraExtractor();
@@ -966,7 +966,33 @@ START_SECTION(void untargetedMatching(
   TEST_STRING_EQUAL(features[10].getMetaValue("spectral_library_comments"), comments)
 }
 END_SECTION
+*/
+START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) const)
+{
+  // MS Library offered by: MoNa - MassBank of North America
+  // Title: GC-MS Spectra
+  // http://mona.fiehnlab.ucdavis.edu/downloads
+  // https://creativecommons.org/licenses/by/4.0/legalcode
+  // Changes made: Only a very small subset of spectra is reproduced
 
+  const String msp_path = OPENMS_GET_TEST_DATA_PATH("MoNA-export-GC-MS_Spectra_reduced_TSE_matchSpectrum.msp");
+  MSExperiment gcms_experiment;
+  TargetedSpectraExtractor tse;
+  Param params = tse.getParameters();
+  params.setValue("output_format", "traML");
+  params.setValue("deisotoping:use_deisotoper", "true");
+  tse.setParameters(params);
+
+  MSExperiment library;
+  MSPGenericFile mse(msp_path, library);
+
+  TEST_EQUAL(library.getSpectra().size(), 21)
+
+  std::string tmp_filename;
+  NEW_TMP_FILE(tmp_filename);
+  tse.storeSpectra(tmp_filename, library);
+}
+END_SECTION
 
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////

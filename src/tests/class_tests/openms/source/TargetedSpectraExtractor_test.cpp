@@ -978,6 +978,11 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, Tar
   MzMLFile mzml;
   mzml.load(experiment_path, experiment);
 
+  //
+  // Keep only MS1 spectra
+  // input  : experiment read from mzML file
+  // output : ms_peakmap (PeakMap)
+  //
   OpenMS::PeakMap ms_peakmap;
   for (OpenMS::MSSpectrum& spec : experiment.getSpectra())
   {
@@ -989,10 +994,25 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, Tar
   }
   ms_peakmap.sortSpectra(true);
 
+  // Detect mass in MS1 spectra
+  // A mass trace extraction method that gathers peaks similar in m/z and moving along retention time
+  // (feature detection in the workflow)
+  //
+  //  input  : ms_peakmap
+  //  output : m_traces
+  //
   OpenMS::MassTraceDetection mtdet;
   std::vector<OpenMS::MassTrace> m_traces;
   mtdet.run(ms_peakmap, m_traces, 1000);
 
+  // FeatureFindingMetabo Method for the assembly of mass traces belonging to the same isotope
+  // pattern, i.e., that are compatible in retention times, mass-to-charge ratios,
+  // and isotope abundances.
+  // (grouping in the workflow)
+  //
+  // input  : m_traces
+  // output : feat_map (FeatureMap), feat_chromatograms (not used)
+  //
   OpenMS::FeatureFindingMetabo ffmet;
   OpenMS::FeatureMap feat_map;
   std::vector<std::vector<OpenMS::MSChromatogram>> feat_chromatograms;
@@ -1006,7 +1026,14 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, Tar
   ffmet.setParameters(ffmet_param);
   ffmet.run(m_traces_final, feat_map, feat_chromatograms);
 
-  // Run the accurate mass search engine
+  // AccurateMassSearchEngine: An algorithm to search for exact mass matches from a spectrum against a database (e.g. HMDB).
+  // (accurate mass search in the workflow)
+  //
+  // will load the HMDB library in CHEMISTRY/
+  //
+  // input  : feat_map
+  // output : feat_map (FeatureMap), output (MzTab, not used)
+  //
   OpenMS::AccurateMassSearchEngine ams;
   OpenMS::MzTab output;
   ams.init();
@@ -1056,13 +1083,16 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, Tar
     }
   }
 
+  // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
+  // 
   TargetedSpectraExtractor tse;
-  std::string tmp_filename;
-  NEW_TMP_FILE(tmp_filename);
   std::vector<MSSpectrum> annotated_spectra;
   tse.annotateSpectra(experiment.getSpectra(),
                       fmap,
                       annotated_spectra);
+
+  //  std::string tmp_filename;
+  //  NEW_TMP_FILE(tmp_filename);
 
   std::cout << "End" << std::endl;
 

@@ -280,9 +280,11 @@ namespace OpenMS
     */
 // =================================================
     annotated_spectra.clear();
-//    const std::vector<ReactionMonitoringTransition>& transitions = targeted_exp.getTransitions();
     for (const auto& s : spectra)
     {
+      auto level = s.getMSLevel();
+      if (level == 1)
+        continue; // we want to annotate MS2 spectra only
       const double spectrum_rt = s.getRT();
       const double rt_left_lim = spectrum_rt - rt_window_ / 2.0;
       const double rt_right_lim = spectrum_rt + rt_window_ / 2.0;
@@ -317,7 +319,6 @@ namespace OpenMS
           }
         }
       }
-//      std::cout << "annotateSpectra(): (RT: " << spectrum_rt << ") (MZ: " << spectrum_mz << ")" << std::endl;
     }
   }
 

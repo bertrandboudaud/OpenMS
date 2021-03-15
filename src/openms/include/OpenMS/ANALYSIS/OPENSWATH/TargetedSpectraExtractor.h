@@ -186,6 +186,15 @@ public:
       FeatureMap& features,
       bool compute_features = true
     ) const;
+    
+    /**
+     TODO
+     input is not targetExperiment but Feature.
+    */
+    void annotateSpectra(
+        const std::vector<MSSpectrum>& spectra,
+        const FeatureMap& features,
+        std::vector<MSSpectrum>& annotated_spectra) const;
 
     /**
       @brief Filters and annotates those spectra that could potentially match the
@@ -415,7 +424,7 @@ public:
       FeatureMap& features
     );
 
-    void storeSpectra(const String& filename, MSExperiment& experiment) const;
+    void storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const;
 
 protected:
     /// Overridden function from DefaultParamHandler to keep members up to date, when a parameter is changed

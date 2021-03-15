@@ -56,12 +56,12 @@ namespace OpenMS
                                                                                     const FeatureMapping::FeatureToMs2Indices& feature_ms2_index,
                                                                                     const double& precursor_rt_tol,
                                                                                     const double& precursor_mz_distance,
-                                                                                    const double& cosine_sim_threshold,
-                                                                                    const double& transition_threshold,
-                                                                                    const double& min_fragment_mz,
-                                                                                    const double& max_fragment_mz,
+                                                                                    const double& cosine_sim_threshold, // Not needed
+                                                                                    const double& transition_threshold, // needed
+                                                                                    const double& min_fragment_mz, // needed
+                                                                                    const double& max_fragment_mz, // needed
                                                                                     const bool& method_consensus_spectrum,
-                                                                                    const bool& exclude_ms2_precursor,
+                                                                                    const bool& exclude_ms2_precursor, // needed
                                                                                     const unsigned int& file_counter)
   {
     int transition_group_counter = 0;

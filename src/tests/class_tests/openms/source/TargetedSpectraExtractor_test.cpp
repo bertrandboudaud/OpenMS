@@ -42,6 +42,11 @@
 #include <OpenMS/FORMAT/MzMLFile.h>
 ///////////////////////////
 
+#include <OpenMS/FILTERING/DATAREDUCTION/MassTraceDetection.h>
+#include <OpenMS/FILTERING/DATAREDUCTION/ElutionPeakDetection.h>
+#include <OpenMS/FILTERING/DATAREDUCTION/FeatureFindingMetabo.h>
+#include <OpenMS/ANALYSIS/ID/AccurateMassSearchEngine.h>
+
 using namespace OpenMS;
 using namespace std;
 
@@ -967,30 +972,114 @@ START_SECTION(void untargetedMatching(
 }
 END_SECTION
 */
-START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) const)
+START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const)
 {
-  // MS Library offered by: MoNa - MassBank of North America
-  // Title: GC-MS Spectra
-  // http://mona.fiehnlab.ucdavis.edu/downloads
-  // https://creativecommons.org/licenses/by/4.0/legalcode
-  // Changes made: Only a very small subset of spectra is reproduced
+  const String experiment_path = OPENMS_GET_TEST_DATA_PATH("Germicidin A standard 5e-2_GA1_01_27401.mzML");
+  MzMLFile mzml;
+  mzml.load(experiment_path, experiment);
 
-  const String msp_path = OPENMS_GET_TEST_DATA_PATH("MoNA-export-GC-MS_Spectra_reduced_TSE_matchSpectrum.msp");
-  MSExperiment gcms_experiment;
+  OpenMS::PeakMap ms_peakmap;
+  for (OpenMS::MSSpectrum& spec : experiment.getSpectra())
+  {
+    // we want only MS1 specrtra
+    if (spec.getMSLevel() == 1)
+    {
+      ms_peakmap.addSpectrum(spec);
+    }
+  }
+  ms_peakmap.sortSpectra(true);
+
+  OpenMS::MassTraceDetection mtdet;
+  std::vector<OpenMS::MassTrace> m_traces;
+  mtdet.run(ms_peakmap, m_traces, 1000);
+
+  OpenMS::FeatureFindingMetabo ffmet;
+  OpenMS::FeatureMap feat_map;
+  std::vector<std::vector<OpenMS::MSChromatogram>> feat_chromatograms;
+  std::vector<OpenMS::MassTrace>  m_traces_final = m_traces;
+  for (auto& trace : m_traces_final)// estimate FWHM, so .getIntensity() can be called later
+  {
+    trace.estimateFWHM(false);
+  }
+  OpenMS::Param ffmet_param;
+  ffmet_param.setValue("use_smoothed_intensities", "false");
+  ffmet.setParameters(ffmet_param);
+  ffmet.run(m_traces_final, feat_map, feat_chromatograms);
+
+  // Run the accurate mass search engine
+  OpenMS::AccurateMassSearchEngine ams;
+  OpenMS::MzTab output;
+  ams.init();
+  ams.run(feat_map, output);
+  // Remake the feature map replacing the peptide hits as features/sub-features (like done in SmartPeak)
+  OpenMS::FeatureMap fmap;
+  for (const OpenMS::Feature& feature : feat_map)
+  {
+    for (const auto& ident : feature.getPeptideIdentifications())
+    {
+      for (const auto& hit : ident.getHits())
+      {
+        OpenMS::Feature f;
+        OpenMS::Feature s = feature;
+        f.setUniqueId();
+        f.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
+        s.setUniqueId();
+        s.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
+        std::string native_id = hit.getMetaValue("chemical_formula").toString() + ";" + hit.getMetaValue("modifications").toString();
+        s.setMetaValue("native_id", native_id);
+        s.setMetaValue("identifier", hit.getMetaValue("identifier"));
+        s.setMetaValue("description", hit.getMetaValue("description"));
+        s.setMetaValue("modifications", hit.getMetaValue("modifications"));
+        std::string adducts;
+        try
+        {
+          std::string str = hit.getMetaValue("modifications").toString();
+          std::string delimiter = ";";
+          adducts = str.substr(1, str.find(delimiter) - 1);
+        }
+        catch (const std::exception& e)
+        {
+          std::cout << e.what();
+        }
+        s.setMetaValue("adducts", adducts);
+        OpenMS::EmpiricalFormula chemform(hit.getMetaValue("chemical_formula").toString());
+        double adduct_mass = s.getMZ() * std::abs(hit.getCharge()) + static_cast<double>(hit.getMetaValue("mz_error_Da")) - chemform.getMonoWeight();
+        s.setMetaValue("dc_charge_adduct_mass", adduct_mass);
+        s.setMetaValue("chemical_formula", hit.getMetaValue("chemical_formula"));
+        s.setMetaValue("mz_error_ppm", hit.getMetaValue("mz_error_ppm"));
+        s.setMetaValue("mz_error_Da", hit.getMetaValue("mz_error_Da"));
+        s.setCharge(hit.getCharge());
+        std::vector<OpenMS::Feature> subs = {s};
+        f.setSubordinates(subs);
+        fmap.push_back(f);
+      }
+    }
+  }
+
+  TargetedSpectraExtractor tse;
+  std::string tmp_filename;
+  NEW_TMP_FILE(tmp_filename);
+  std::vector<MSSpectrum> annotated_spectra;
+  tse.annotateSpectra(experiment.getSpectra(),
+                      fmap,
+                      annotated_spectra);
+
+  std::cout << "End" << std::endl;
+
+  // no elution
+
+
+  /*
   TargetedSpectraExtractor tse;
   Param params = tse.getParameters();
   params.setValue("output_format", "traML");
   params.setValue("deisotoping:use_deisotoper", "true");
   tse.setParameters(params);
 
-  MSExperiment library;
-  MSPGenericFile mse(msp_path, library);
-
-  TEST_EQUAL(library.getSpectra().size(), 21)
-
   std::string tmp_filename;
   NEW_TMP_FILE(tmp_filename);
-  tse.storeSpectra(tmp_filename, library);
+  tse.storeSpectra(tmp_filename, experiment, targeted_exp);
+  */
 }
 END_SECTION
 

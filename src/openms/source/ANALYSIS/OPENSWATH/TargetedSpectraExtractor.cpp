@@ -216,6 +216,111 @@ namespace OpenMS
     params.setValidStrings("method", ListUtils::create<String>("highest_intensity,consensus_spectrum"));
   }
 
+  /*
+  As a user, I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from.
+  
+  Currently, the annotateSpectra method only allows for annotating based off of user defined transitions as input
+  (i.e., const TargetedExperiment& targeted_exp).
+  
+  We would like to add support for annotating based off of MS1 features resulting from SearchAccurateMass.
+  In this case, the input would be e.g., const FeatureMap& ms1_features and the RTs and names (i.e., PeptideRef)
+  would be defined in the FeatureMap.
+  */
+  void TargetedSpectraExtractor::annotateSpectra(
+      const std::vector<MSSpectrum>& spectra,
+      const FeatureMap& features,
+      std::vector<MSSpectrum>& annotated_spectra) const
+  {
+
+// =================================================
+    // Debug
+    /*
+    std::cout << "-- experiment" << std::endl;
+    for (const auto& v : spectra)
+    {
+      const auto& name = v.getName();
+      const auto& t = v.getMSLevel();
+      std::cout << "MS" << t << " : " << name << std::endl;
+      if (t == 2)
+      {
+        int break_here = 42;
+      }
+      for (const auto& p : v.getPrecursors())
+      {
+        std::vector<String> keys;
+        p.getKeys(keys);
+        for (const auto& k : keys)
+        {
+          std::cout << k << " : " << p.getMetaValue(k) << std::endl;
+        }
+        //std::cout << "  - " << native_id << std::endl;
+      }
+    }
+    */
+/*
+    std::cout << "-- features" << std::endl;
+    for (const auto& feature : features)
+    {
+      std::vector<String> keys;
+      feature.getKeys(keys);
+      for (const auto& k : keys)
+      {
+        std::cout << k << " : " << feature.getMetaValue(k) << std::endl;
+      }
+      for (const auto& s : feature.getSubordinates())
+      {
+        std::vector<String> keys;
+        feature.getKeys(keys);
+        for (const auto& k : keys)
+        {
+          std::cout << k << " : " << feature.getMetaValue(k) << std::endl;
+        }
+      }
+    }
+    */
+// =================================================
+    annotated_spectra.clear();
+//    const std::vector<ReactionMonitoringTransition>& transitions = targeted_exp.getTransitions();
+    for (const auto& s : spectra)
+    {
+      const double spectrum_rt = s.getRT();
+      const double rt_left_lim = spectrum_rt - rt_window_ / 2.0;
+      const double rt_right_lim = spectrum_rt + rt_window_ / 2.0;
+      const std::vector<Precursor>& precursors = s.getPrecursors();
+      if (precursors.empty())
+      {
+        OPENMS_LOG_WARN << "annotateSpectra(): No precursor MZ found. Setting spectrum_mz to 0." << std::endl;
+      }
+      const double spectrum_mz = precursors.empty() ? 0.0 : precursors.front().getMZ();
+      const double mz_tolerance = mz_unit_is_Da_ ? mz_tolerance_ : mz_tolerance_ / 1e6;
+
+      // When spectrum_mz is 0, the mz check on transitions is inhibited
+      const double mz_left_lim = spectrum_mz ? spectrum_mz - mz_tolerance : std::numeric_limits<double>::min();
+      const double mz_right_lim = spectrum_mz ? spectrum_mz + mz_tolerance : std::numeric_limits<double>::max();
+
+      for (const auto& feature : features)
+      {
+        for (const auto& sb : feature.getSubordinates())
+        {
+          const auto& peptide_ref = sb.getMetaValue("PeptideRef");
+          const double target_mz = sb.getMZ();
+          const double target_rt = sb.getRT();
+          if (target_rt >= rt_left_lim && target_rt <= rt_right_lim &&
+              target_mz >= mz_left_lim && target_mz <= mz_right_lim)
+          {
+            std::cout << "annotateSpectra(): " << peptide_ref << "]";
+            std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
+                      << std::endl;
+            MSSpectrum annotated_spectrum = s;
+            annotated_spectrum.setName(peptide_ref);
+            annotated_spectra.push_back(annotated_spectrum);
+          }
+        }
+      }
+//      std::cout << "annotateSpectra(): (RT: " << spectrum_rt << ") (MZ: " << spectrum_mz << ")" << std::endl;
+    }
+  }
+
   void TargetedSpectraExtractor::annotateSpectra(
     const std::vector<MSSpectrum>& spectra,
     const TargetedExperiment& targeted_exp,
@@ -679,7 +784,7 @@ namespace OpenMS
     targetedMatching(picked, cmp, features);
   }
 
-  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment) const
+  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const
   {
     if (deisotoping_use_deisotoper_)
     {
@@ -708,7 +813,6 @@ namespace OpenMS
       }
     }
 
-    // TODO should we do this ? ========================================================
     // remove peaks form MS2 which are at a higher mz than the precursor + 10 ppm
     for (auto& peakmap_it : experiment.getSpectra())
     {
@@ -737,7 +841,6 @@ namespace OpenMS
                        spectrum.end());
       }
     }
-    //========================================================
 
     if (output_format_ == "msp")
     {
@@ -749,6 +852,52 @@ namespace OpenMS
       // construct TargetedExperiment
       TargetedExperiment t_exp;
 
+      std::vector<MSSpectrum> annotated_spectra;
+      FeatureMap features;
+      annotateSpectra(experiment.getSpectra(), targeted_experiment, annotated_spectra, features);
+
+      std::cout << "-- experiment" << std::endl;
+      for (const auto& v : experiment)
+      {
+        const auto& name = v.getName();
+        const auto& t = v.getMSLevel();
+        std::cout << "MS" << t << " : " << name << std::endl;
+        for (const auto& p : v.getPrecursors())
+        {
+          const auto& native_id = p.getMetaValue("native_id");
+          //std::cout << "  - " << native_id << std::endl;
+        }
+      }
+      std::cout << "-- features" << std::endl;
+      for (const auto& feature : features)
+      {
+        const auto& name = feature.getMetaValue("transition_name");
+        std::cout << name << std::endl;
+        for (const auto& s : feature.getSubordinates())
+        {
+          std::cout << name << std::endl;
+        }
+      }
+      std::cout << "-- annotated_spectra"  << std::endl;
+      for (const auto& v : annotated_spectra)
+      {
+        const auto& name = v.getName();
+        const auto& t = v.getMSLevel();
+        const auto& m1 = v.getNativeID();
+        const auto& m2 = v.getPeptideIdentifications().size();
+        std::cout << "MS" << t << " : " << name << std::endl;
+        for (const auto& b : v)
+        {
+          std::cout << b.getMZ() << std::endl;
+        }
+        for (const auto& p : v.getPrecursors())
+        {
+          const auto& native_id = v.getName();
+          std::cout << "  precursor - " << native_id << std::endl;
+        }
+      }
+
+      /*
       // potential transitions of one file
       std::vector<MetaboTargetedAssay> v_mta;
       int file_counter = 0;
@@ -798,10 +947,12 @@ namespace OpenMS
         v_cmp.push_back(it.second.potential_cmp);
         v_rmt_all.insert(v_rmt_all.end(), it.second.potential_rmts.begin(), it.second.potential_rmts.end());
       }
+      */
 
       // convert possible transitions to TargetedExperiment
-      t_exp.setCompounds(v_cmp);
-      t_exp.setTransitions(v_rmt_all);
+      // t_exp.setCompounds(v_cmp); // not needed
+      
+      //t_exp.setTransitions(v_rmt_all); // this is what we have to construct
 
       // use MRMAssay methods for filtering
       MRMAssay assay;

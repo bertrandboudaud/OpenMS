@@ -972,7 +972,7 @@ START_SECTION(void untargetedMatching(
 }
 END_SECTION
 */
-START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const)
+START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) const)
 {
   const String experiment_path = OPENMS_GET_TEST_DATA_PATH("Germicidin A standard 5e-2_GA1_01_27401.mzML");
   MzMLFile mzml;
@@ -1026,90 +1026,40 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment, Tar
   ffmet.setParameters(ffmet_param);
   ffmet.run(m_traces_final, feat_map, feat_chromatograms);
 
-  // AccurateMassSearchEngine: An algorithm to search for exact mass matches from a spectrum against a database (e.g. HMDB).
-  // (accurate mass search in the workflow)
-  //
-  // will load the HMDB library in CHEMISTRY/
-  //
-  // input  : feat_map
-  // output : feat_map (FeatureMap), output (MzTab, not used)
-  //
-  OpenMS::AccurateMassSearchEngine ams;
-  OpenMS::MzTab output;
-  ams.init();
-  ams.run(feat_map, output);
-  // Remake the feature map replacing the peptide hits as features/sub-features (like done in SmartPeak)
+  // searchSpectra (on MS1 spectra)
+  // merge features (will be on MS1 spectra) - take from SmartPeak
+  // TSE.annotateSpectra
+  // TSE.pickSpectra
+  // score and select
+  // searchSpectra (will be on MS2 spectra)
+  // merge features again (on MS2 spectra features)
+  // store - we want to store MS1 and the associated MS2 features (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
+  //    we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
+
+  /**
+  * searchSpectrum
+  */
+  TargetedSpectraExtractor tse;
   OpenMS::FeatureMap fmap;
-  for (const OpenMS::Feature& feature : feat_map)
-  {
-    for (const auto& ident : feature.getPeptideIdentifications())
-    {
-      for (const auto& hit : ident.getHits())
-      {
-        OpenMS::Feature f;
-        OpenMS::Feature s = feature;
-        f.setUniqueId();
-        f.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
-        s.setUniqueId();
-        s.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
-        std::string native_id = hit.getMetaValue("chemical_formula").toString() + ";" + hit.getMetaValue("modifications").toString();
-        s.setMetaValue("native_id", native_id);
-        s.setMetaValue("identifier", hit.getMetaValue("identifier"));
-        s.setMetaValue("description", hit.getMetaValue("description"));
-        s.setMetaValue("modifications", hit.getMetaValue("modifications"));
-        std::string adducts;
-        try
-        {
-          std::string str = hit.getMetaValue("modifications").toString();
-          std::string delimiter = ";";
-          adducts = str.substr(1, str.find(delimiter) - 1);
-        }
-        catch (const std::exception& e)
-        {
-          std::cout << e.what();
-        }
-        s.setMetaValue("adducts", adducts);
-        OpenMS::EmpiricalFormula chemform(hit.getMetaValue("chemical_formula").toString());
-        double adduct_mass = s.getMZ() * std::abs(hit.getCharge()) + static_cast<double>(hit.getMetaValue("mz_error_Da")) - chemform.getMonoWeight();
-        s.setMetaValue("dc_charge_adduct_mass", adduct_mass);
-        s.setMetaValue("chemical_formula", hit.getMetaValue("chemical_formula"));
-        s.setMetaValue("mz_error_ppm", hit.getMetaValue("mz_error_ppm"));
-        s.setMetaValue("mz_error_Da", hit.getMetaValue("mz_error_Da"));
-        s.setCharge(hit.getCharge());
-        std::vector<OpenMS::Feature> subs = {s};
-        f.setSubordinates(subs);
-        fmap.push_back(f);
-      }
-    }
-  }
+  tse.searchSpectrum(feat_map, fmap);
 
   // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
   // 
-  TargetedSpectraExtractor tse;
-  std::vector<MSSpectrum> annotated_spectra;
-  tse.annotateSpectra(experiment.getSpectra(),
-                      fmap,
-                      annotated_spectra);
+  //std::vector<MSSpectrum> annotated_spectra;
+  //tse.annotateSpectra(experiment.getSpectra(),
+  //                    fmap,
+  //                    annotated_spectra);
 
-  //  std::string tmp_filename;
-  //  NEW_TMP_FILE(tmp_filename);
-
-  std::cout << "End" << std::endl;
-
-  // no elution
-
-
-  /*
-  TargetedSpectraExtractor tse;
+  // Store
   Param params = tse.getParameters();
   params.setValue("output_format", "traML");
   params.setValue("deisotoping:use_deisotoper", "true");
   tse.setParameters(params);
-
   std::string tmp_filename;
   NEW_TMP_FILE(tmp_filename);
-  tse.storeSpectra(tmp_filename, experiment, targeted_exp);
-  */
+  tse.storeSpectra(tmp_filename, experiment, fmap);
+
+  std::cout << "End" << std::endl;
 }
 END_SECTION
 

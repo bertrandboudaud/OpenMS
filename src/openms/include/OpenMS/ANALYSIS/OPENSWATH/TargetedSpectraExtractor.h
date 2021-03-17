@@ -197,6 +197,13 @@ public:
         std::vector<MSSpectrum>& annotated_spectra) const;
 
     /**
+     TODO
+    */
+    void searchSpectrum(
+        OpenMS::FeatureMap& feat_map,
+        OpenMS::FeatureMap& feat_map_output) const;
+
+    /**
       @brief Filters and annotates those spectra that could potentially match the
       transitions of the target list.
 
@@ -424,7 +431,7 @@ public:
       FeatureMap& features
     );
 
-    void storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const;
+    void storeSpectra(const String& filename, MSExperiment& experiment, FeatureMap& features) const;
 
 protected:
     /// Overridden function from DefaultParamHandler to keep members up to date, when a parameter is changed

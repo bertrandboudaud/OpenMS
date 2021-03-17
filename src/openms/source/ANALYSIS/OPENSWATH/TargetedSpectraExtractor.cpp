@@ -46,6 +46,7 @@
 #include <OpenMS/ANALYSIS/OPENSWATH/MRMAssay.h>
 #include <OpenMS/KERNEL/RangeUtils.h>
 #include <OpenMS/ANALYSIS/OPENSWATH/TransitionPQPFile.h>
+#include <OpenMS/ANALYSIS/ID/AccurateMassSearchEngine.h>
 
 namespace OpenMS
 {
@@ -280,15 +281,15 @@ namespace OpenMS
     */
 // =================================================
     annotated_spectra.clear();
-    for (const auto& s : spectra)
+    for (const auto& spectrum : spectra)
     {
-      auto level = s.getMSLevel();
+      auto level = spectrum.getMSLevel();
       if (level == 1)
         continue; // we want to annotate MS2 spectra only
-      const double spectrum_rt = s.getRT();
+      const double spectrum_rt = spectrum.getRT();
       const double rt_left_lim = spectrum_rt - rt_window_ / 2.0;
       const double rt_right_lim = spectrum_rt + rt_window_ / 2.0;
-      const std::vector<Precursor>& precursors = s.getPrecursors();
+      const std::vector<Precursor>& precursors = spectrum.getPrecursors();
       if (precursors.empty())
       {
         OPENMS_LOG_WARN << "annotateSpectra(): No precursor MZ found. Setting spectrum_mz to 0." << std::endl;
@@ -302,21 +303,75 @@ namespace OpenMS
 
       for (const auto& feature : features)
       {
-        for (const auto& sb : feature.getSubordinates())
+        for (const auto& subordinate : feature.getSubordinates())
         {
-          const auto& peptide_ref = sb.getMetaValue("PeptideRef");
-          const double target_mz = sb.getMZ();
-          const double target_rt = sb.getRT();
+          const auto& peptide_ref = subordinate.getMetaValue("PeptideRef");
+          const double target_mz = subordinate.getMZ();
+          const double target_rt = subordinate.getRT();
           if (target_rt >= rt_left_lim && target_rt <= rt_right_lim &&
               target_mz >= mz_left_lim && target_mz <= mz_right_lim)
           {
             std::cout << "annotateSpectra(): " << peptide_ref << "]";
             std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
                       << std::endl;
-            MSSpectrum annotated_spectrum = s;
+            MSSpectrum annotated_spectrum = spectrum;
             annotated_spectrum.setName(peptide_ref);
+            annotated_spectrum.setNativeID(subordinate.getMetaValue("native_id"));
             annotated_spectra.push_back(annotated_spectrum);
           }
+        }
+      }
+    }
+  }
+
+  void TargetedSpectraExtractor::searchSpectrum(
+      OpenMS::FeatureMap& feat_map,
+      OpenMS::FeatureMap& feat_map_output) const
+  {
+    OpenMS::AccurateMassSearchEngine ams;
+    OpenMS::MzTab output;
+    ams.init();
+    ams.run(feat_map, output);
+    // Remake the feature map replacing the peptide hits as features/sub-features (like done in SmartPeak)
+    for (const OpenMS::Feature& feature : feat_map)
+    {
+      for (const auto& ident : feature.getPeptideIdentifications())
+      {
+        for (const auto& hit : ident.getHits())
+        {
+          OpenMS::Feature f;
+          OpenMS::Feature s = feature;
+          f.setUniqueId();
+          f.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
+          s.setUniqueId();
+          s.setMetaValue("PeptideRef", hit.getMetaValue("identifier").toStringList().at(0));
+          std::string native_id = hit.getMetaValue("chemical_formula").toString() + ";" + hit.getMetaValue("modifications").toString();
+          s.setMetaValue("native_id", native_id);
+          s.setMetaValue("identifier", hit.getMetaValue("identifier"));
+          s.setMetaValue("description", hit.getMetaValue("description"));
+          s.setMetaValue("modifications", hit.getMetaValue("modifications"));
+          std::string adducts;
+          try
+          {
+            std::string str = hit.getMetaValue("modifications").toString();
+            std::string delimiter = ";";
+            adducts = str.substr(1, str.find(delimiter) - 1);
+          }
+          catch (const std::exception& e)
+          {
+            std::cout << e.what();
+          }
+          s.setMetaValue("adducts", adducts);
+          OpenMS::EmpiricalFormula chemform(hit.getMetaValue("chemical_formula").toString());
+          double adduct_mass = s.getMZ() * std::abs(hit.getCharge()) + static_cast<double>(hit.getMetaValue("mz_error_Da")) - chemform.getMonoWeight();
+          s.setMetaValue("dc_charge_adduct_mass", adduct_mass);
+          s.setMetaValue("chemical_formula", hit.getMetaValue("chemical_formula"));
+          s.setMetaValue("mz_error_ppm", hit.getMetaValue("mz_error_ppm"));
+          s.setMetaValue("mz_error_Da", hit.getMetaValue("mz_error_Da"));
+          s.setCharge(hit.getCharge());
+          std::vector<OpenMS::Feature> subs = {s};
+          f.setSubordinates(subs);
+          feat_map_output.push_back(f);
         }
       }
     }
@@ -648,6 +703,13 @@ namespace OpenMS
 
     // select the best spectrum for each group of spectra having the same name
     selectSpectra(scored, features, extracted_spectra, extracted_features, compute_features);
+
+  //TODO:
+  //  searchSpectra
+
+  // merge feature on ms2 spectra
+
+  // store
   }
 
   void TargetedSpectraExtractor::extractSpectra(
@@ -785,7 +847,7 @@ namespace OpenMS
     targetedMatching(picked, cmp, features);
   }
 
-  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment, TargetedExperiment& targeted_experiment) const
+  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment, FeatureMap& features) const
   {
     if (deisotoping_use_deisotoper_)
     {
@@ -850,52 +912,21 @@ namespace OpenMS
     }
     else if (output_format_ == "traML")
     {
-      // construct TargetedExperiment
-      TargetedExperiment t_exp;
-
+      // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
+      //
+      // need to do before
       std::vector<MSSpectrum> annotated_spectra;
-      FeatureMap features;
-      annotateSpectra(experiment.getSpectra(), targeted_experiment, annotated_spectra, features);
+      TargetedSpectraExtractor::annotateSpectra(experiment.getSpectra(), features, annotated_spectra);
 
-      std::cout << "-- experiment" << std::endl;
-      for (const auto& v : experiment)
-      {
-        const auto& name = v.getName();
-        const auto& t = v.getMSLevel();
-        std::cout << "MS" << t << " : " << name << std::endl;
-        for (const auto& p : v.getPrecursors())
-        {
-          const auto& native_id = p.getMetaValue("native_id");
-          //std::cout << "  - " << native_id << std::endl;
-        }
-      }
-      std::cout << "-- features" << std::endl;
-      for (const auto& feature : features)
-      {
-        const auto& name = feature.getMetaValue("transition_name");
-        std::cout << name << std::endl;
-        for (const auto& s : feature.getSubordinates())
-        {
-          std::cout << name << std::endl;
-        }
-      }
+      // Debug - Log
+      //
       std::cout << "-- annotated_spectra"  << std::endl;
       for (const auto& v : annotated_spectra)
       {
         const auto& name = v.getName();
-        const auto& t = v.getMSLevel();
-        const auto& m1 = v.getNativeID();
-        const auto& m2 = v.getPeptideIdentifications().size();
-        std::cout << "MS" << t << " : " << name << std::endl;
-        for (const auto& b : v)
-        {
-          std::cout << b.getMZ() << std::endl;
-        }
-        for (const auto& p : v.getPrecursors())
-        {
-          const auto& native_id = v.getName();
-          std::cout << "  precursor - " << native_id << std::endl;
-        }
+        const auto& level = v.getMSLevel();
+        const auto& native_id = v.getNativeID();
+        std::cout << "MS" << level << ", name: " << name << ", native_id: " << native_id << ":" << std::endl;
       }
 
       /*
@@ -950,16 +981,52 @@ namespace OpenMS
       }
       */
 
+      // anotte
+      // search
+      // merge feature
+      //    Merge features to put adducts into one feature (see SmartPeak) . before store spectra
+
+      // construct TargetedExperiment
+      std::vector<ReactionMonitoringTransition> v_rmt_all;
+      for (const auto& annoted_spectrum : annotated_spectra)
+      {
+        const auto& compound_name = annoted_spectrum.getName();
+        const auto& level = annoted_spectrum.getMSLevel();
+        const auto& compound_adduct = annoted_spectrum.getNativeID();
+        // make the loop here to get the second component of the pair.
+        for (const auto& v : annoted_spectrum)
+        {
+          /*
+          // peptideref or native id
+          native_id = v.getMetaValue("native_id")
+                          std::pair<String, String>
+                              pair_mta = std::make_pair(compound_name, native_id);
+                              */
+        }
+        
+        OpenMS::ReactionMonitoringTransition rmt;
+        const auto& precursor = annoted_spectrum.getPrecursors()[0];
+        rmt.setPrecursorMZ(precursor.getMZ());
+        //rmt.setProductMZ()
+        //r.setLibraryIntensity()
+        rmt.setCompoundRef(compound_adduct);
+        rmt.setName(compound_name);
+        rmt.setNativeID(compound_name);
+        v_rmt_all.push_back(rmt);
+      }
+      TargetedExperiment t_exp;
+      t_exp.setTransitions(v_rmt_all);
+
       // convert possible transitions to TargetedExperiment
       // t_exp.setCompounds(v_cmp); // not needed
       
       //t_exp.setTransitions(v_rmt_all); // this is what we have to construct
 
       // use MRMAssay methods for filtering
-      MRMAssay assay;
+      //MRMAssay assay;
 
       // filter: min/max transitions
-      assay.detectingTransitionsCompound(t_exp, min_transitions_, max_transitions_);
+      //assay.detectingTransitionsCompound(t_exp, min_transitions_, max_transitions_);
 
       // validate
       OpenMS::TransitionTSVFile tsv_file;

@@ -431,7 +431,11 @@ public:
       FeatureMap& features
     );
 
-    void storeSpectra(const String& filename, MSExperiment& experiment, FeatureMap& features) const;
+    void storeSpectraTraML(const String& filename, MSExperiment& experiment, FeatureMap& features) const;
+
+    void storeSpectraMSP(const String& filename, MSExperiment& experiment) const;
+    
+    void TargetedSpectraExtractor::mergeFeatures(const OpenMS::FeatureMap& fmap_input, OpenMS::FeatureMap& fmap_output) const;
 
 protected:
     /// Overridden function from DefaultParamHandler to keep members up to date, when a parameter is changed

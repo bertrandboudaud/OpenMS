@@ -84,8 +84,6 @@ namespace OpenMS
     top_matches_to_report_ = (Size)param_.getValue("top_matches_to_report");
     min_match_score_ = (double)param_.getValue("min_match_score");
     
-    output_format_ = param_.getValue("output_format");
-
     min_transitions_ = param_.getValue("min_transitions");
     max_transitions_ = param_.getValue("max_transitions");
     cosine_similarity_threshold_ = (double) param_.getValue("cosine_similarity_threshold");
@@ -181,9 +179,6 @@ namespace OpenMS
     );
     params.setMinFloat("min_match_score", 0.0);
     params.setMaxFloat("min_match_score", 1.0);
-
-    params.setValue("output_format", "msp", "Use Gaussian filter for smoothing (alternative is Savitzky-Golay filter)");
-    params.setValidStrings("output_format", ListUtils::create<String>("msp,traML"));
 
     params.setValue("min_transitions", 3, "Minimal number of transitions");
     params.setValue("max_transitions", 6, "Maximal number of transitions");
@@ -847,7 +842,7 @@ namespace OpenMS
     targetedMatching(picked, cmp, features);
   }
 
-  void TargetedSpectraExtractor::storeSpectra(const String& filename, MSExperiment& experiment, FeatureMap& features) const
+  void TargetedSpectraExtractor::storeSpectraTraML(const String& filename, MSExperiment& experiment, FeatureMap& features) const
   {
     if (deisotoping_use_deisotoper_)
     {
@@ -905,141 +900,280 @@ namespace OpenMS
       }
     }
 
-    if (output_format_ == "msp")
+    // Debug - Log
+    //
+    std::cout << "-- annotated_spectra"  << std::endl;
+    for (const auto& v : annotated_spectra)
     {
-      MSPGenericFile msp_file;
-      msp_file.store(filename, experiment);
+      const auto& name = v.getName();
+      const auto& level = v.getMSLevel();
+      const auto& native_id = v.getNativeID();
+      std::cout << "MS" << level << ", name: " << name << ", native_id: " << native_id << ":" << std::endl;
     }
-    else if (output_format_ == "traML")
+
+    /*
+    // potential transitions of one file
+    std::vector<MetaboTargetedAssay> v_mta;
+    int file_counter = 0;
+
+    bool method_consensus_spectrum = method_ == "consensus_spectrum" ? true : false;
+    FeatureMapping::FeatureToMs2Indices feature_mapping;// reference to *basefeature in vector<FeatureMap>
+    v_mta = MetaboTargetedAssay::extractMetaboTargetedAssay(experiment,
+                                                              feature_mapping,
+                                                              consensus_spectrum_precursor_rt_tolerance_,
+                                                              precursor_mz_distance_,
+                                                              cosine_similarity_threshold_,
+                                                              transition_threshold_,
+                                                              min_fragment_mz_,
+                                                              max_fragment_mz_,
+                                                              method_consensus_spectrum,
+                                                              exclude_ms2_precursor_,
+                                                              file_counter);
+
+    // use first rank based on precursor intensity
+    std::map<std::pair<String, String>, MetaboTargetedAssay> map_mta;
+    for (const auto& it : v_mta)
     {
-      // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
-      //
-      // need to do before
-      std::vector<MSSpectrum> annotated_spectra;
-      TargetedSpectraExtractor::annotateSpectra(experiment.getSpectra(), features, annotated_spectra);
+      std::pair<String, String> pair_mta = make_pair(it.compound_name, it.compound_adduct);
 
-      // Debug - Log
-      //
-      std::cout << "-- annotated_spectra"  << std::endl;
-      for (const auto& v : annotated_spectra)
+      // check if value in map with key k does not exists and fill with current pair
+      if (map_mta.count(pair_mta) == 0)
       {
-        const auto& name = v.getName();
-        const auto& level = v.getMSLevel();
-        const auto& native_id = v.getNativeID();
-        std::cout << "MS" << level << ", name: " << name << ", native_id: " << native_id << ":" << std::endl;
+        map_mta[pair_mta] = it;
       }
-
-      /*
-      // potential transitions of one file
-      std::vector<MetaboTargetedAssay> v_mta;
-      int file_counter = 0;
-
-      bool method_consensus_spectrum = method_ == "consensus_spectrum" ? true : false;
-      FeatureMapping::FeatureToMs2Indices feature_mapping;// reference to *basefeature in vector<FeatureMap>
-      v_mta = MetaboTargetedAssay::extractMetaboTargetedAssay(experiment,
-                                                                feature_mapping,
-                                                                consensus_spectrum_precursor_rt_tolerance_,
-                                                                precursor_mz_distance_,
-                                                                cosine_similarity_threshold_,
-                                                                transition_threshold_,
-                                                                min_fragment_mz_,
-                                                                max_fragment_mz_,
-                                                                method_consensus_spectrum,
-                                                                exclude_ms2_precursor_,
-                                                                file_counter);
-
-      // use first rank based on precursor intensity
-      std::map<std::pair<String, String>, MetaboTargetedAssay> map_mta;
-      for (const auto& it : v_mta)
+      else
       {
-        std::pair<String, String> pair_mta = make_pair(it.compound_name, it.compound_adduct);
-
-        // check if value in map with key k does not exists and fill with current pair
-        if (map_mta.count(pair_mta) == 0)
+        // check which on has the higher intensity precursor and if replace the current value
+        double map_precursor_int = map_mta.at(pair_mta).precursor_int;
+        double current_precursor_int = it.precursor_int;
+        if (map_precursor_int < current_precursor_int)
         {
           map_mta[pair_mta] = it;
         }
-        else
+      }
+    }
+
+    // merge possible transitions
+    std::vector<TargetedExperiment::Compound> v_cmp;
+    std::vector<ReactionMonitoringTransition> v_rmt_all;
+    for (const auto& it : map_mta)
+    {
+      v_cmp.push_back(it.second.potential_cmp);
+      v_rmt_all.insert(v_rmt_all.end(), it.second.potential_rmts.begin(), it.second.potential_rmts.end());
+    }
+    */
+
+    // anotte
+    // search
+    // merge feature
+    //    Merge features to put adducts into one feature (see SmartPeak) . before store spectra
+
+    // construct TargetedExperiment
+    std::vector<ReactionMonitoringTransition> v_rmt_all;
+    for (const auto& annoted_spectrum : annotated_spectra)
+    {
+      const auto& compound_name = annoted_spectrum.getName();
+      const auto& level = annoted_spectrum.getMSLevel();
+      const auto& compound_adduct = annoted_spectrum.getNativeID();
+      // make the loop here to get the second component of the pair.
+      for (const auto& v : annoted_spectrum)
+      {
+        /*
+        // peptideref or native id
+        native_id = v.getMetaValue("native_id")
+                        std::pair<String, String>
+                            pair_mta = std::make_pair(compound_name, native_id);
+                            */
+      }
+        
+      OpenMS::ReactionMonitoringTransition rmt;
+      const auto& precursor = annoted_spectrum.getPrecursors()[0];
+      rmt.setPrecursorMZ(precursor.getMZ());
+      //rmt.setProductMZ()
+      //r.setLibraryIntensity()
+      rmt.setCompoundRef(compound_adduct);
+      rmt.setName(compound_name);
+      rmt.setNativeID(compound_name);
+      v_rmt_all.push_back(rmt);
+    }
+    TargetedExperiment t_exp;
+    t_exp.setTransitions(v_rmt_all);
+
+    // convert possible transitions to TargetedExperiment
+    // t_exp.setCompounds(v_cmp); // not needed
+      
+    //t_exp.setTransitions(v_rmt_all); // this is what we have to construct
+
+    // use MRMAssay methods for filtering
+    //MRMAssay assay;
+
+    // filter: min/max transitions
+    //assay.detectingTransitionsCompound(t_exp, min_transitions_, max_transitions_);
+
+    // validate
+    OpenMS::TransitionTSVFile tsv_file;
+    tsv_file.validateTargetedExperiment(t_exp);
+
+    // write traML
+    TraMLFile traml_file;
+    traml_file.store(filename, t_exp);
+  }
+
+  void TargetedSpectraExtractor::mergeFeatures(const OpenMS::FeatureMap& fmap_input, OpenMS::FeatureMap& fmap_output) const
+  {
+    try
+    {
+      // Pass 1: organize into a map by combining features and subordinates with the same `identifier`
+      OpenMS::FeatureMap fmap;
+      std::map<std::string, std::vector<OpenMS::Feature>> fmapmap;
+      for (const OpenMS::Feature& f : rawDataHandler_IO.getFeatureMap())
+      {
+        if (f.metaValueExists("identifier"))
         {
-          // check which on has the higher intensity precursor and if replace the current value
-          double map_precursor_int = map_mta.at(pair_mta).precursor_int;
-          double current_precursor_int = it.precursor_int;
-          if (map_precursor_int < current_precursor_int)
+          auto found_f = fmapmap.emplace(f.getMetaValue("identifier").toStringList().at(0), std::vector<OpenMS::Feature>({f}));
+          if (!found_f.second)
           {
-            map_mta[pair_mta] = it;
+            fmapmap.at(f.getMetaValue("identifier").toStringList().at(0)).push_back(f);
+          }
+        }
+        for (const OpenMS::Feature& s : f.getSubordinates())
+        {
+          if (s.metaValueExists("identifier"))
+          {
+            auto found_s = fmapmap.emplace(s.getMetaValue("identifier").toStringList().at(0), std::vector<OpenMS::Feature>({s}));
+            if (!found_s.second)
+            {
+              fmapmap.at(s.getMetaValue("identifier").toStringList().at(0)).push_back(s);
+            }
           }
         }
       }
 
-      // merge possible transitions
-      std::vector<TargetedExperiment::Compound> v_cmp;
-      std::vector<ReactionMonitoringTransition> v_rmt_all;
-      for (const auto& it : map_mta)
+      // Pass 2: compute the consensus manually
+      for (const auto& f_map : fmapmap)
       {
-        v_cmp.push_back(it.second.potential_cmp);
-        v_rmt_all.insert(v_rmt_all.end(), it.second.potential_rmts.begin(), it.second.potential_rmts.end());
-      }
-      */
 
-      // anotte
-      // search
-      // merge feature
-      //    Merge features to put adducts into one feature (see SmartPeak) . before store spectra
-
-      // construct TargetedExperiment
-      std::vector<ReactionMonitoringTransition> v_rmt_all;
-      for (const auto& annoted_spectrum : annotated_spectra)
-      {
-        const auto& compound_name = annoted_spectrum.getName();
-        const auto& level = annoted_spectrum.getMSLevel();
-        const auto& compound_adduct = annoted_spectrum.getNativeID();
-        // make the loop here to get the second component of the pair.
-        for (const auto& v : annoted_spectrum)
+        // compute the total intensity for weighting
+        double total_intensity = 0;
+        for (const auto& f : f_map.second)
         {
-          /*
-          // peptideref or native id
-          native_id = v.getMetaValue("native_id")
-                          std::pair<String, String>
-                              pair_mta = std::make_pair(compound_name, native_id);
-                              */
+          if (f.metaValueExists("peak_apex_int"))
+            total_intensity += (double) f.getMetaValue("peak_apex_int");
+          else
+            total_intensity += f.getIntensity();
         }
-        
-        OpenMS::ReactionMonitoringTransition rmt;
-        const auto& precursor = annoted_spectrum.getPrecursors()[0];
-        rmt.setPrecursorMZ(precursor.getMZ());
-        //rmt.setProductMZ()
-        //r.setLibraryIntensity()
-        rmt.setCompoundRef(compound_adduct);
-        rmt.setName(compound_name);
-        rmt.setNativeID(compound_name);
-        v_rmt_all.push_back(rmt);
+
+        // compute the weighted averages
+        double rt = 0.0, m = 0.0, intensity = 0.0, peak_apex_int = 0.0;
+        double weighting_factor = 1.0 / f_map.second.size();// will be updated
+        for (const auto& f : f_map.second)
+        {
+          // compute the weighting factor
+          if (f.metaValueExists("peak_apex_int"))
+            weighting_factor = (double) f.getMetaValue("peak_apex_int") / total_intensity;
+          else
+            weighting_factor = f.getIntensity() / total_intensity;
+
+          // compute the weighted averages
+          rt += f.getRT() * weighting_factor;
+          if (f.getCharge() == 0)
+            LOGW << "ConsensusFeature::computeDechargeConsensus() WARNING: Feature's charge is 0! This will lead to M=0!";
+          //m += (f.getMZ() * std::abs(f.getCharge()) + (double)f.getMetaValue("dc_charge_adduct_mass")) * weighting_factor; // weighted mz
+          m += f.getMZ() * weighting_factor;
+          //intensity += f.getIntensity() * weighting_factor; // weighted intensity
+          intensity += f.getIntensity();
+          if (f.metaValueExists("peak_apex_int"))
+            //peak_apex_int += (double)f.getMetaValue("peak_apex_int") * weighting_factor; // weighted peak_apex_int
+            peak_apex_int += (double) f.getMetaValue("peak_apex_int");
+        }
+
+        // make the feature map and assign subordinates
+        OpenMS::Feature f;
+        f.setUniqueId();
+        f.setMetaValue("PeptideRef", f_map.first);
+        f.setMZ(m);
+        f.setRT(rt);
+        f.setMetaValue("scan_polarity", f_map.second.front().getMetaValue("scan_polarity"));
+        f.setIntensity(intensity);
+        f.setMetaValue("peak_apex_int", peak_apex_int);
+        f.setSubordinates(f_map.second);
+        fmap.push_back(f);
       }
-      TargetedExperiment t_exp;
-      t_exp.setTransitions(v_rmt_all);
-
-      // convert possible transitions to TargetedExperiment
-      // t_exp.setCompounds(v_cmp); // not needed
-      
-      //t_exp.setTransitions(v_rmt_all); // this is what we have to construct
-
-      // use MRMAssay methods for filtering
-      //MRMAssay assay;
-
-      // filter: min/max transitions
-      //assay.detectingTransitionsCompound(t_exp, min_transitions_, max_transitions_);
-
-      // validate
-      OpenMS::TransitionTSVFile tsv_file;
-      tsv_file.validateTargetedExperiment(t_exp);
-
-      // write traML
-      TraMLFile traml_file;
-      traml_file.store(filename, t_exp);
+      rawDataHandler_IO.setFeatureMap(fmap);
     }
-    else
+    catch (const std::exception& e)
     {
-      throw Exception::InvalidParameter(__FILE__, __LINE__, OPENMS_PRETTY_FUNCTION, String("Unsupported output file format " + output_format_));
+      LOGE << e.what();
     }
+    rawDataHandler_IO.updateFeatureMapHistory();
+
+    LOGI << "MergeFeatures output size: " << rawDataHandler_IO.getFeatureMap().size();
+    LOGD << "END MergeFeatures";
+  }
+
+
+  void TargetedSpectraExtractor::storeSpectraMSP(const String& filename, MSExperiment& experiment) const
+  {
+    if (deisotoping_use_deisotoper_)
+    {
+      bool make_single_charged = false;
+      for (auto& peakmap_it : experiment.getSpectra())
+      {
+        MSSpectrum& spectrum = peakmap_it;
+        if (spectrum.getMSLevel() == 1)
+        {
+          continue;
+        }
+        else
+        {
+          bool fragment_unit_ppm = deisotoping_fragment_unit_ == "ppm" ? true : false;
+          Deisotoper::deisotopeAndSingleCharge(spectrum,
+                                               deisotoping_fragment_tolerance_,
+                                               fragment_unit_ppm,
+                                               deisotoping_min_charge_,
+                                               deisotoping_max_charge_,
+                                               deisotoping_keep_only_deisotoped_,
+                                               deisotoping_min_isopeaks_,
+                                               deisotoping_max_isopeaks_,
+                                               make_single_charged,
+                                               deisotoping_annotate_charge_);
+        }
+      }
+    }
+
+    // remove peaks form MS2 which are at a higher mz than the precursor + 10 ppm
+    for (auto& peakmap_it : experiment.getSpectra())
+    {
+      MSSpectrum& spectrum = peakmap_it;
+      if (spectrum.getMSLevel() == 1)
+      {
+        continue;
+      }
+      else
+      {
+        // if peak mz higher than precursor mz set intensity to zero
+        double prec_mz = spectrum.getPrecursors()[0].getMZ();
+        double mass_diff = Math::ppmToMass(10.0, prec_mz);
+        for (auto& spec : spectrum)
+        {
+          if (spec.getMZ() > prec_mz + mass_diff)
+          {
+            spec.setIntensity(0);
+          }
+        }
+        spectrum.erase(remove_if(spectrum.begin(),
+                                 spectrum.end(),
+                                 InIntensityRange<PeakMap::PeakType>(1,
+                                                                     std::numeric_limits<PeakMap::PeakType::IntensityType>::max(),
+                                                                     true)),
+                       spectrum.end());
+      }
+    }
+
+
+    // Store
+    MSPGenericFile msp_file;
+    msp_file.store(filename, experiment);
   }
 
 }// namespace OpenMS

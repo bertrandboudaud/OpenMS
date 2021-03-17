@@ -1026,29 +1026,31 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   ffmet.setParameters(ffmet_param);
   ffmet.run(m_traces_final, feat_map, feat_chromatograms);
 
-  // searchSpectra (on MS1 spectra)
-  // merge features (will be on MS1 spectra) - take from SmartPeak
-  // TSE.annotateSpectra
-  // TSE.pickSpectra
-  // score and select
-  // searchSpectra (will be on MS2 spectra)
-  // merge features again (on MS2 spectra features)
-  // store - we want to store MS1 and the associated MS2 features (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
-  //    we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
-
-  /**
-  * searchSpectrum
-  */
+  // WORKFLOW STEP: searchSpectra (on MS1 spectra)
   TargetedSpectraExtractor tse;
   OpenMS::FeatureMap fmap;
   tse.searchSpectrum(feat_map, fmap);
 
+  // WORKFLOW STEP: merge features (will be on MS1 spectra) - take from SmartPeak
+
+  // WORKFLOW STEP: TSE.annotateSpectra
   // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
-  // 
-  //std::vector<MSSpectrum> annotated_spectra;
-  //tse.annotateSpectra(experiment.getSpectra(),
-  //                    fmap,
-  //                    annotated_spectra);
+  //
+  // need to do before
+  std::vector<MSSpectrum> annotated_spectra;
+  TargetedSpectraExtractor::annotateSpectra(experiment.getSpectra(), features, annotated_spectra);
+
+
+  // WORKFLOW STEP: TSE.pickSpectra
+
+  // WORKFLOW STEP: score and select
+
+  // WORKFLOW STEP: searchSpectra (will be on MS2 spectra)
+
+  // WORKFLOW STEP: merge features again (on MS2 spectra features)
+
+  // WORKFLOW STEP: store - we want to store MS1 and the associated MS2 features (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
+  //    we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
 
   // Store
   Param params = tse.getParameters();
@@ -1057,7 +1059,7 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   tse.setParameters(params);
   std::string tmp_filename;
   NEW_TMP_FILE(tmp_filename);
-  tse.storeSpectra(tmp_filename, experiment, fmap);
+  tse.storeSpectraTraML(tmp_filename, experiment, fmap);
 
   std::cout << "End" << std::endl;
 }

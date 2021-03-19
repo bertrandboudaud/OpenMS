@@ -431,7 +431,7 @@ public:
       FeatureMap& features
     );
 
-    void storeSpectraTraML(const String& filename, MSExperiment& experiment, FeatureMap& features) const;
+    void storeSpectraTraML(const String& filename, MSExperiment& experiment) const;
 
     void storeSpectraMSP(const String& filename, MSExperiment& experiment) const;
     

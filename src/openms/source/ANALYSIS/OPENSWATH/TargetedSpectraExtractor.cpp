@@ -280,7 +280,9 @@ namespace OpenMS
     {
       auto level = spectrum.getMSLevel();
       if (level == 1)
-        continue; // we want to annotate MS2 spectra only
+      {
+        continue;// we want to annotate MS2 spectra only
+      }
       const double spectrum_rt = spectrum.getRT();
       const double rt_left_lim = spectrum_rt - rt_window_ / 2.0;
       const double rt_right_lim = spectrum_rt + rt_window_ / 2.0;
@@ -296,7 +298,7 @@ namespace OpenMS
       const double mz_left_lim = spectrum_mz ? spectrum_mz - mz_tolerance : std::numeric_limits<double>::min();
       const double mz_right_lim = spectrum_mz ? spectrum_mz + mz_tolerance : std::numeric_limits<double>::max();
 
-      for (const auto& feature : features)
+      for (const auto& feature : features) // here use MS1 features to annotate
       {
         for (const auto& subordinate : feature.getSubordinates())
         {
@@ -314,6 +316,7 @@ namespace OpenMS
             annotated_spectrum.setNativeID(subordinate.getMetaValue("native_id"));
             annotated_spectra.push_back(annotated_spectrum);
           }
+          // fill the ms2 features map the same way it is done in the annotate method
         }
       }
     }
@@ -842,7 +845,7 @@ namespace OpenMS
     targetedMatching(picked, cmp, features);
   }
 
-  void TargetedSpectraExtractor::storeSpectraTraML(const String& filename, MSExperiment& experiment, FeatureMap& features) const
+  void TargetedSpectraExtractor::storeSpectraTraML(const String& filename, MSExperiment& experiment) const
   {
     if (deisotoping_use_deisotoper_)
     {
@@ -903,7 +906,7 @@ namespace OpenMS
     // Debug - Log
     //
     std::cout << "-- annotated_spectra"  << std::endl;
-    for (const auto& v : annotated_spectra)
+    for (const auto& v : experiment.getSpectra())
     {
       const auto& name = v.getName();
       const auto& level = v.getMSLevel();
@@ -970,7 +973,7 @@ namespace OpenMS
 
     // construct TargetedExperiment
     std::vector<ReactionMonitoringTransition> v_rmt_all;
-    for (const auto& annoted_spectrum : annotated_spectra)
+    for (const auto& annoted_spectrum : experiment.getSpectra())
     {
       const auto& compound_name = annoted_spectrum.getName();
       const auto& level = annoted_spectrum.getMSLevel();
@@ -1024,9 +1027,8 @@ namespace OpenMS
     try
     {
       // Pass 1: organize into a map by combining features and subordinates with the same `identifier`
-      OpenMS::FeatureMap fmap;
       std::map<std::string, std::vector<OpenMS::Feature>> fmapmap;
-      for (const OpenMS::Feature& f : rawDataHandler_IO.getFeatureMap())
+      for (const OpenMS::Feature& f : fmap_input)
       {
         if (f.metaValueExists("identifier"))
         {
@@ -1077,7 +1079,7 @@ namespace OpenMS
           // compute the weighted averages
           rt += f.getRT() * weighting_factor;
           if (f.getCharge() == 0)
-            LOGW << "ConsensusFeature::computeDechargeConsensus() WARNING: Feature's charge is 0! This will lead to M=0!";
+            std::cout  << "ConsensusFeature::computeDechargeConsensus() WARNING: Feature's charge is 0! This will lead to M=0!";
           //m += (f.getMZ() * std::abs(f.getCharge()) + (double)f.getMetaValue("dc_charge_adduct_mass")) * weighting_factor; // weighted mz
           m += f.getMZ() * weighting_factor;
           //intensity += f.getIntensity() * weighting_factor; // weighted intensity
@@ -1097,18 +1099,13 @@ namespace OpenMS
         f.setIntensity(intensity);
         f.setMetaValue("peak_apex_int", peak_apex_int);
         f.setSubordinates(f_map.second);
-        fmap.push_back(f);
+        fmap_output.push_back(f);
       }
-      rawDataHandler_IO.setFeatureMap(fmap);
     }
     catch (const std::exception& e)
     {
-      LOGE << e.what();
+      std::cout << e.what();
     }
-    rawDataHandler_IO.updateFeatureMapHistory();
-
-    LOGI << "MergeFeatures output size: " << rawDataHandler_IO.getFeatureMap().size();
-    LOGD << "END MergeFeatures";
   }
 
 

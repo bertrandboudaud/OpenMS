@@ -983,69 +983,84 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   // input  : experiment read from mzML file
   // output : ms_peakmap (PeakMap)
   //
-  OpenMS::PeakMap ms_peakmap;
+  OpenMS::PeakMap ms1_peakmap;
   for (OpenMS::MSSpectrum& spec : experiment.getSpectra())
   {
     // we want only MS1 specrtra
     if (spec.getMSLevel() == 1)
     {
-      ms_peakmap.addSpectrum(spec);
+      ms1_peakmap.addSpectrum(spec);
     }
   }
-  ms_peakmap.sortSpectra(true);
+  ms1_peakmap.sortSpectra(true);
 
   // Detect mass in MS1 spectra
   // A mass trace extraction method that gathers peaks similar in m/z and moving along retention time
   // (feature detection in the workflow)
   //
-  //  input  : ms_peakmap
-  //  output : m_traces
+  //  input  : ms1_peakmap
+  //  output : detected_traces
   //
-  OpenMS::MassTraceDetection mtdet;
-  std::vector<OpenMS::MassTrace> m_traces;
-  mtdet.run(ms_peakmap, m_traces, 1000);
+  OpenMS::MassTraceDetection mass_trace_detection;
+  std::vector<OpenMS::MassTrace> detected_traces;
+  mass_trace_detection.run(ms1_peakmap, detected_traces, 1000);
 
   // FeatureFindingMetabo Method for the assembly of mass traces belonging to the same isotope
   // pattern, i.e., that are compatible in retention times, mass-to-charge ratios,
   // and isotope abundances.
   // (grouping in the workflow)
   //
-  // input  : m_traces
-  // output : feat_map (FeatureMap), feat_chromatograms (not used)
+  // input  : detected_traces
+  // output : metabo_found_features_map (FeatureMap), not_used_feat_chromatograms (not used)
   //
-  OpenMS::FeatureFindingMetabo ffmet;
-  OpenMS::FeatureMap feat_map;
-  std::vector<std::vector<OpenMS::MSChromatogram>> feat_chromatograms;
-  std::vector<OpenMS::MassTrace>  m_traces_final = m_traces;
-  for (auto& trace : m_traces_final)// estimate FWHM, so .getIntensity() can be called later
+  OpenMS::FeatureFindingMetabo feature_finding_metabo;
+  OpenMS::FeatureMap metabo_found_features_map;
+  std::vector<std::vector<OpenMS::MSChromatogram>> not_used_feat_chromatograms;
+  for (auto& trace : detected_traces)// estimate FWHM, so .getIntensity() can be called later
   {
     trace.estimateFWHM(false);
   }
-  OpenMS::Param ffmet_param;
-  ffmet_param.setValue("use_smoothed_intensities", "false");
-  ffmet.setParameters(ffmet_param);
-  ffmet.run(m_traces_final, feat_map, feat_chromatograms);
+  OpenMS::Param feature_finding_metabo_param;
+  feature_finding_metabo_param.setValue("use_smoothed_intensities", "false");
+  feature_finding_metabo.setParameters(feature_finding_metabo_param);
+  feature_finding_metabo.run(detected_traces, metabo_found_features_map, not_used_feat_chromatograms);
 
   // WORKFLOW STEP: searchSpectra (on MS1 spectra)
-  TargetedSpectraExtractor tse;
-  OpenMS::FeatureMap fmap;
-  tse.searchSpectrum(feat_map, fmap);
+  TargetedSpectraExtractor targeted_spectra_extractor;
+  OpenMS::FeatureMap ms1_accurate_mass_found_feature_map;
+  targeted_spectra_extractor.searchSpectrum(metabo_found_features_map, ms1_accurate_mass_found_feature_map);
 
   // WORKFLOW STEP: merge features (will be on MS1 spectra) - take from SmartPeak
+  OpenMS::FeatureMap ms1_merged_features;
+  targeted_spectra_extractor.mergeFeatures(ms1_accurate_mass_found_feature_map, ms1_merged_features);
 
   // WORKFLOW STEP: TSE.annotateSpectra
   // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
-  //
-  // need to do before
   std::vector<MSSpectrum> annotated_spectra;
-  TargetedSpectraExtractor::annotateSpectra(experiment.getSpectra(), features, annotated_spectra);
-
+  OpenMS::FeatureMap ms2_features; // will be the input of annoteSpectra
+  targeted_spectra_extractor.annotateSpectra(experiment.getSpectra(), ms2_features, annotated_spectra);
 
   // WORKFLOW STEP: TSE.pickSpectra
-
-  // WORKFLOW STEP: score and select
+  std::vector<MSSpectrum> picked_spectra;
+  for (const auto& spectrum : annotated_spectra)
+  {
+    MSSpectrum picked_spectrum;
+    targeted_spectra_extractor.pickSpectrum(spectrum, picked_spectrum);
+    picked_spectra.push_back(picked_spectrum);
+  }
+  
+  // WORKFLOW STEP: score *and* select
+  // FeatureMap scored_features;
+  std::vector<MSSpectrum> scored_spectra;
+//  targeted_spectra_extractor.scoreSpectra(annotated_spectra, picked_spectra, /*scored_features, */scored_spectra);
+  //fails because number of ms1_merged_features (1724) is different from number of scored_spectra (286)
+  targeted_spectra_extractor.scoreSpectra(annotated_spectra, picked_spectra, ms2_features, scored_spectra);
+  std::vector<MSSpectrum> selected_spectra;
+  targeted_spectra_extractor.selectSpectra(scored_spectra, /*const FeatureMap& features, */ selected_spectra /*, FeatureMap& selected_features, true*/);
 
   // WORKFLOW STEP: searchSpectra (will be on MS2 spectra)
+  OpenMS::FeatureMap ms2_accurate_mass_found_feature_map;
+  //targeted_spectra_extractor.searchSpectrum(scored_features, ms2_accurate_mass_found_feature_map);
 
   // WORKFLOW STEP: merge features again (on MS2 spectra features)
 
@@ -1053,13 +1068,13 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   //    we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
 
   // Store
-  Param params = tse.getParameters();
+  Param params = targeted_spectra_extractor.getParameters();
   params.setValue("output_format", "traML");
   params.setValue("deisotoping:use_deisotoper", "true");
-  tse.setParameters(params);
+  targeted_spectra_extractor.setParameters(params);
   std::string tmp_filename;
   NEW_TMP_FILE(tmp_filename);
-  tse.storeSpectraTraML(tmp_filename, experiment, fmap);
+  targeted_spectra_extractor.storeSpectraTraML(tmp_filename, experiment);
 
   std::cout << "End" << std::endl;
 }

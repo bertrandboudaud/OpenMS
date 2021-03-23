@@ -224,8 +224,10 @@ namespace OpenMS
   */
   void TargetedSpectraExtractor::annotateSpectra(
       const std::vector<MSSpectrum>& spectra,
-      const FeatureMap& features,
-      std::vector<MSSpectrum>& annotated_spectra) const
+      const FeatureMap& ms1_features,
+      FeatureMap& ms2_features,
+      std::vector<MSSpectrum>& annotated_spectra,
+      const bool compute_features) const
   {
 
 // =================================================
@@ -298,7 +300,7 @@ namespace OpenMS
       const double mz_left_lim = spectrum_mz ? spectrum_mz - mz_tolerance : std::numeric_limits<double>::min();
       const double mz_right_lim = spectrum_mz ? spectrum_mz + mz_tolerance : std::numeric_limits<double>::max();
 
-      for (const auto& feature : features) // here use MS1 features to annotate
+      for (const auto& feature : ms1_features)// here use MS1 features to annotate
       {
         for (const auto& subordinate : feature.getSubordinates())
         {
@@ -315,8 +317,16 @@ namespace OpenMS
             annotated_spectrum.setName(peptide_ref);
             annotated_spectrum.setNativeID(subordinate.getMetaValue("native_id"));
             annotated_spectra.push_back(annotated_spectrum);
+            if (compute_features)
+            {
+              // fill the ms2 features map the same way it is done in the annotate method
+              Feature feature;
+              feature.setRT(spectrum_rt);
+              feature.setMZ(spectrum_mz);
+              feature.setMetaValue("transition_name", peptide_ref);
+              ms2_features.push_back(feature);
+            }
           }
-          // fill the ms2 features map the same way it is done in the annotate method
         }
       }
     }
@@ -539,12 +549,19 @@ namespace OpenMS
         total_tic += annotated_spectra[i][j].getIntensity();
       }
 
+      int test_to_remove = picked_spectra[i].getMSLevel();
       double avgFWHM { 0 };
-      for (Size j = 0; j < picked_spectra[i].getFloatDataArrays()[0].size(); ++j)
+      if (picked_spectra[i].getMSLevel() == 2) // BB i noticed some MS1 lvel spectra have no getFloatDataArrays
       {
-        avgFWHM += picked_spectra[i].getFloatDataArrays()[0][j];
+//        if (picked_spectra[i].getFloatDataArrays().size()) // Added - useless with the if above.
+        {
+          for (Size j = 0; j < picked_spectra[i].getFloatDataArrays()[0].size(); ++j)
+          {
+            avgFWHM += picked_spectra[i].getFloatDataArrays()[0][j];
+          }
+          avgFWHM /= picked_spectra[i].getFloatDataArrays()[0].size();
+        }
       }
-      avgFWHM /= picked_spectra[i].getFloatDataArrays()[0].size();
 
       SignalToNoiseEstimatorMedian<MSSpectrum> sne;
       Param p;
@@ -966,11 +983,6 @@ namespace OpenMS
     }
     */
 
-    // anotte
-    // search
-    // merge feature
-    //    Merge features to put adducts into one feature (see SmartPeak) . before store spectra
-
     // construct TargetedExperiment
     std::vector<ReactionMonitoringTransition> v_rmt_all;
     for (const auto& annoted_spectrum : experiment.getSpectra())
@@ -981,12 +993,8 @@ namespace OpenMS
       // make the loop here to get the second component of the pair.
       for (const auto& v : annoted_spectrum)
       {
-        /*
-        // peptideref or native id
-        native_id = v.getMetaValue("native_id")
-                        std::pair<String, String>
-                            pair_mta = std::make_pair(compound_name, native_id);
-                            */
+        //auto native_id = v.getMetaValue("native_id")
+        //std::pair<String, String> pair_mta = std::make_pair(compound_name, native_id);
       }
         
       OpenMS::ReactionMonitoringTransition rmt;

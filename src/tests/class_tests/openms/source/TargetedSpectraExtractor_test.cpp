@@ -1038,7 +1038,7 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   // annotateSpectra :  I would like to annotate my MS2 spectra with the likely MS1 feature that it was derived from
   std::vector<MSSpectrum> annotated_spectra;
   OpenMS::FeatureMap ms2_features; // will be the input of annoteSpectra
-  targeted_spectra_extractor.annotateSpectra(experiment.getSpectra(), ms2_features, annotated_spectra);
+  targeted_spectra_extractor.annotateSpectra(experiment.getSpectra(), ms1_merged_features, ms2_features, annotated_spectra, true);
 
   // WORKFLOW STEP: TSE.pickSpectra
   std::vector<MSSpectrum> picked_spectra;
@@ -1052,20 +1052,22 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   // WORKFLOW STEP: score *and* select
   // FeatureMap scored_features;
   std::vector<MSSpectrum> scored_spectra;
-//  targeted_spectra_extractor.scoreSpectra(annotated_spectra, picked_spectra, /*scored_features, */scored_spectra);
-  //fails because number of ms1_merged_features (1724) is different from number of scored_spectra (286)
   targeted_spectra_extractor.scoreSpectra(annotated_spectra, picked_spectra, ms2_features, scored_spectra);
   std::vector<MSSpectrum> selected_spectra;
-  targeted_spectra_extractor.selectSpectra(scored_spectra, /*const FeatureMap& features, */ selected_spectra /*, FeatureMap& selected_features, true*/);
+  FeatureMap selected_features;
+  targeted_spectra_extractor.selectSpectra(scored_spectra, ms2_features, selected_spectra, selected_features, true);
 
   // WORKFLOW STEP: searchSpectra (will be on MS2 spectra)
   OpenMS::FeatureMap ms2_accurate_mass_found_feature_map;
-  //targeted_spectra_extractor.searchSpectrum(scored_features, ms2_accurate_mass_found_feature_map);
+  targeted_spectra_extractor.searchSpectrum(selected_features, ms2_accurate_mass_found_feature_map);
 
   // WORKFLOW STEP: merge features again (on MS2 spectra features)
+  OpenMS::FeatureMap ms2_merged_features;
+  targeted_spectra_extractor.mergeFeatures(ms2_accurate_mass_found_feature_map, ms2_merged_features);
 
-  // WORKFLOW STEP: store - we want to store MS1 and the associated MS2 features (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
-  //    we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
+  // WORKFLOW STEP: store - we want to store MS1 and the associated MS2 features 
+  // (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
+  // we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
 
   // Store
   Param params = targeted_spectra_extractor.getParameters();

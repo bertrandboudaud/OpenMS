@@ -193,8 +193,10 @@ public:
     */
     void annotateSpectra(
         const std::vector<MSSpectrum>& spectra,
-        const FeatureMap& features,
-        std::vector<MSSpectrum>& annotated_spectra) const;
+        const FeatureMap& ms1_features,
+        FeatureMap& ms2_features,
+        std::vector<MSSpectrum>& annotated_spectra,
+        const bool compute_features) const;
 
     /**
      TODO

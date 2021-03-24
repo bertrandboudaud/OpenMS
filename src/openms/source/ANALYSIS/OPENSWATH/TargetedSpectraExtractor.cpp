@@ -47,6 +47,7 @@
 #include <OpenMS/KERNEL/RangeUtils.h>
 #include <OpenMS/ANALYSIS/OPENSWATH/TransitionPQPFile.h>
 #include <OpenMS/ANALYSIS/ID/AccurateMassSearchEngine.h>
+#include <OpenMS/ANALYSIS/OPENSWATH/TransitionTSVFile.h>
 
 namespace OpenMS
 {
@@ -865,46 +866,60 @@ namespace OpenMS
 
   void TargetedSpectraExtractor::storeSpectraTraML(const String& filename, /*MSExperiment& experiment, */const OpenMS::FeatureMap& ms1_features, const OpenMS::FeatureMap& ms2_features) const
   { 
-    // Log MS2 features
+    // WORKFLOW STEP: store - we want to store MS1 and the associated MS2 features
+    // (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
+    // we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).
+    // construct TargetedExperiment
+    std::vector<ReactionMonitoringTransition> v_rmt_all;
+
+    std::map<std::string, std::vector<const Feature*>> ms1_to_ms2;
     for (const auto& feature : ms2_features)
     {
-      std::vector<String> keys;
-      feature.getKeys(keys);
-      for (const auto& key : keys)
-      {
-        std::cout << key << " : " << feature.getMetaValue(key) << std::endl;
-      }
       for (const auto& subordinate : feature.getSubordinates())
       {
-        std::vector<String> sub_keys;
-        subordinate.getKeys(sub_keys);
-        for (const auto& sub_key : sub_keys)
-        {
-          std::cout << "  " << sub_key << " : " << subordinate.getMetaValue(sub_key) << std::endl;
-        }
+        ms1_to_ms2[subordinate.getMetaValue("transition_name")].push_back(&subordinate);
       }
     }
-    // Log MS1 features
+
+    std::vector<TargetedExperiment::Peptide> peptides;
     for (const auto& feature : ms1_features)
     {
-      std::vector<String> keys;
-      feature.getKeys(keys);
-      for (const auto& key : keys)
+      std::string peptide_ref = feature.getMetaValue("PeptideRef");
+      OpenMS::TargetedExperiment::Peptide peptide;
+      peptide.id = peptide_ref;
+      peptides.push_back(peptide);
+      for (const auto& ms2_feature : ms1_to_ms2[peptide_ref])
       {
-        std::cout << key << " : " << feature.getMetaValue(key) << std::endl;
-      }
-      for (const auto& subordinate : feature.getSubordinates())
-      {
-        std::vector<String> sub_keys;
-        subordinate.getKeys(sub_keys);
-        for (const auto& sub_key : sub_keys)
-        {
-          std::cout << "  " << sub_key << " : " << subordinate.getMetaValue(sub_key) << std::endl;
-        }
+        std::string native_id = ms2_feature->getMetaValue("native_id");
+//        std::pair<String, String> pair_mta = std::make_pair(peptide_ref, native_id);
+        OpenMS::ReactionMonitoringTransition rmt;
+        //rmt.setCompoundRef(peptide_ref);
+        //rmt.setCVTerms()
+        //rmt.setDecoyTransitionType()
+        //rmt.setDetectingTransition()
+        //rmt.setIdentifyingTransition()
+        //rmt.setIntermediateProducts()
+        rmt.setLibraryIntensity(feature.getIntensity());
+        //rmt.setMetaValue();
+        rmt.setName(ms2_feature->getMetaValue("native_id"));
+        std::ostringstream os;
+        os << ms2_feature->getMetaValue("native_id") << "_" << peptide_ref;
+        rmt.setNativeID(os.str());
+        rmt.setPeptideRef(peptide_ref);
+        //rmt.setPrecursorCVTermList()
+        rmt.setPrecursorMZ(ms2_feature->getMZ());
+        //rmt.setPrediction()
+        //rmt.setProduct()
+        //rmt.setProductMZ();
+        //rmt.setQuantifyingTransition()
+        //rmt.setRetentionTime(ms2_feature->getPosition().getX());
+        v_rmt_all.push_back(rmt);
       }
     }
+
     TargetedExperiment t_exp;
-    // t_exp.setTransitions(v_rmt_all);
+    t_exp.setPeptides(peptides);
+    t_exp.setTransitions(v_rmt_all);
 
     // validate
     OpenMS::TransitionTSVFile tsv_file;

@@ -433,7 +433,7 @@ public:
       FeatureMap& features
     );
 
-    void storeSpectraTraML(const String& filename, MSExperiment& experiment) const;
+    void storeSpectraTraML(const String& filename, /*MSExperiment& experiment,*/ const OpenMS::FeatureMap& ms1_features, const OpenMS::FeatureMap& ms2_features) const;
 
     void storeSpectraMSP(const String& filename, MSExperiment& experiment) const;
     

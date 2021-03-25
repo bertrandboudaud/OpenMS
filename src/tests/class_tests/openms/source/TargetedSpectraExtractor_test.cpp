@@ -1116,18 +1116,6 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   targeted_spectra_extractor.mergeFeatures(ms2_accurate_mass_found_feature_map, ms2_merged_features);
   FeatureXMLFile().store("c:\\tmp\\test\\09_mergeFeatures.featureXML", ms2_merged_features);
 
-  // sets the intensity.
-  // Note! if we set the intensity in annotateSpectra, which look the place to do it (...)
-  // then mergeSpectra will mess it because it will do the addition of the intensity
-  for (auto& feature : ms2_merged_features)
-  {
-    for (auto& subordinate : feature.getSubordinates())
-    {
-      subordinate.setIntensity(subordinate.getPosition().getY());
-    }
-  }
-  FeatureXMLFile().store("c:\\tmp\\test\\10_set_intensity.featureXML", ms2_merged_features);
-
   // WORKFLOW STEP: store - we want to store MS1 and the associated MS2 features 
   // (do 2 functions MSP: MS2 spectra as input param, TraML : take features map as input param)
   // we need a link between MS2 and MS1 features, so we may need the MS2 spectra as input parameter as well (to check).

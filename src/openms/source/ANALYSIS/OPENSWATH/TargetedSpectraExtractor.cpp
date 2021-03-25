@@ -230,54 +230,6 @@ namespace OpenMS
       std::vector<MSSpectrum>& annotated_spectra,
       const bool compute_features) const
   {
-
-// =================================================
-    // Debug
-    /*
-    std::cout << "-- experiment" << std::endl;
-    for (const auto& v : spectra)
-    {
-      const auto& name = v.getName();
-      const auto& t = v.getMSLevel();
-      std::cout << "MS" << t << " : " << name << std::endl;
-      if (t == 2)
-      {
-        int break_here = 42;
-      }
-      for (const auto& p : v.getPrecursors())
-      {
-        std::vector<String> keys;
-        p.getKeys(keys);
-        for (const auto& k : keys)
-        {
-          std::cout << k << " : " << p.getMetaValue(k) << std::endl;
-        }
-        //std::cout << "  - " << native_id << std::endl;
-      }
-    }
-    */
-/*
-    std::cout << "-- features" << std::endl;
-    for (const auto& feature : features)
-    {
-      std::vector<String> keys;
-      feature.getKeys(keys);
-      for (const auto& k : keys)
-      {
-        std::cout << k << " : " << feature.getMetaValue(k) << std::endl;
-      }
-      for (const auto& s : feature.getSubordinates())
-      {
-        std::vector<String> keys;
-        feature.getKeys(keys);
-        for (const auto& k : keys)
-        {
-          std::cout << k << " : " << feature.getMetaValue(k) << std::endl;
-        }
-      }
-    }
-    */
-// =================================================
     annotated_spectra.clear();
     for (const auto& spectrum : spectra)
     {
@@ -324,7 +276,7 @@ namespace OpenMS
               Feature feature;
               feature.setRT(spectrum_rt);
               feature.setMZ(spectrum_mz);
-              //feature.setIntensity(spectrum_mz); // BBBB ist it a good place to set the intensity?
+              feature.setIntensity(spectrum_mz);
               feature.setMetaValue("transition_name", peptide_ref);
               ms2_features.push_back(feature);
             }
@@ -887,6 +839,7 @@ namespace OpenMS
       std::string peptide_ref = feature.getMetaValue("PeptideRef");
       OpenMS::TargetedExperiment::Peptide peptide;
       peptide.id = peptide_ref;
+      peptide.addMetaValues(feature);
       peptides.push_back(peptide);
       for (const auto& ms2_feature : ms1_to_ms2[peptide_ref])
       {
@@ -913,6 +866,7 @@ namespace OpenMS
         //rmt.setProductMZ();
         //rmt.setQuantifyingTransition()
         //rmt.setRetentionTime(ms2_feature->getPosition().getX());
+        rmt.addMetaValues(*ms2_feature);
         v_rmt_all.push_back(rmt);
       }
     }

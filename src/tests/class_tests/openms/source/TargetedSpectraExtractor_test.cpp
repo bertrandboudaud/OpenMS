@@ -1137,8 +1137,8 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   params.setValue("output_format", "traML");
   params.setValue("deisotoping:use_deisotoper", "true");
   targeted_spectra_extractor.setParameters(params);
-  std::string tmp_filename;
-  NEW_TMP_FILE(tmp_filename);
+  std::string tmp_filename = "c:\\tmp\\test\\11_store.TraML";
+  // NEW_TMP_FILE(tmp_filename);
   targeted_spectra_extractor.storeSpectraTraML(tmp_filename, ms1_merged_features, ms2_merged_features);
 
   std::cout << "End" << std::endl;

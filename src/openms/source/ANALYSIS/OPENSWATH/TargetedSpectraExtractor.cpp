@@ -276,7 +276,7 @@ namespace OpenMS
               Feature feature;
               feature.setRT(spectrum_rt);
               feature.setMZ(spectrum_mz);
-              feature.setIntensity(spectrum_mz);
+              feature.setIntensity(spectrum_mz); // BBBB TODO check
               feature.setMetaValue("transition_name", peptide_ref);
               ms2_features.push_back(feature);
             }
@@ -834,17 +834,20 @@ namespace OpenMS
     }
 
     std::vector<TargetedExperiment::Peptide> peptides;
-    for (const auto& feature : ms1_features)
+    for (const auto& ms1_feature : ms1_features)
     {
-      std::string peptide_ref = feature.getMetaValue("PeptideRef");
+      std::string peptide_ref = ms1_feature.getMetaValue("PeptideRef");
       OpenMS::TargetedExperiment::Peptide peptide;
       peptide.id = peptide_ref;
-      peptide.addMetaValues(feature);
+      int precursor_charge = 1;
+      peptide.setChargeState(ms1_feature.getCharge());
+      peptide.addMetaValues(ms1_feature);
       peptides.push_back(peptide);
+      
+      // why peptides and not compound ?
       for (const auto& ms2_feature : ms1_to_ms2[peptide_ref])
       {
         std::string native_id = ms2_feature->getMetaValue("native_id");
-//        std::pair<String, String> pair_mta = std::make_pair(peptide_ref, native_id);
         OpenMS::ReactionMonitoringTransition rmt;
         //rmt.setCompoundRef(peptide_ref);
         //rmt.setCVTerms()
@@ -852,7 +855,7 @@ namespace OpenMS
         //rmt.setDetectingTransition()
         //rmt.setIdentifyingTransition()
         //rmt.setIntermediateProducts()
-        rmt.setLibraryIntensity(feature.getIntensity());
+        rmt.setLibraryIntensity(ms1_feature.getIntensity());
         //rmt.setMetaValue();
         rmt.setName(ms2_feature->getMetaValue("native_id"));
         std::ostringstream os;
@@ -860,10 +863,10 @@ namespace OpenMS
         rmt.setNativeID(os.str());
         rmt.setPeptideRef(peptide_ref);
         //rmt.setPrecursorCVTermList()
-        rmt.setPrecursorMZ(ms2_feature->getMZ());
+        rmt.setPrecursorMZ(ms1_feature.getMZ());
         //rmt.setPrediction()
         //rmt.setProduct()
-        //rmt.setProductMZ();
+        rmt.setProductMZ(ms2_feature->getMZ());
         //rmt.setQuantifyingTransition()
         //rmt.setRetentionTime(ms2_feature->getPosition().getX());
         rmt.addMetaValues(*ms2_feature);

@@ -238,6 +238,9 @@ namespace OpenMS
       {
         continue;// we want to annotate MS2 spectra only
       }
+      //=====================================================================================
+      std::vector<const OpenMS::Feature*> ms2_features_report;
+      //=====================================================================================
       const double spectrum_rt = spectrum.getRT();
       const double rt_left_lim = spectrum_rt - rt_window_ / 2.0;
       const double rt_right_lim = spectrum_rt + rt_window_ / 2.0;
@@ -263,26 +266,45 @@ namespace OpenMS
           if (target_rt >= rt_left_lim && target_rt <= rt_right_lim &&
               target_mz >= mz_left_lim && target_mz <= mz_right_lim)
           {
-            std::cout << "annotateSpectra(): " << peptide_ref << "]";
-            std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
-                      << std::endl;
+            // std::cout << "annotateSpectra(): " << peptide_ref << "]";
+            // std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
+            //          << std::endl;
             MSSpectrum annotated_spectrum = spectrum;
             annotated_spectrum.setName(peptide_ref);
-            annotated_spectrum.setNativeID(subordinate.getMetaValue("native_id"));
             annotated_spectra.push_back(annotated_spectrum);
             if (compute_features)
             {
               // fill the ms2 features map the same way it is done in the annotate method
-              Feature feature;
-              feature.setRT(spectrum_rt);
-              feature.setMZ(spectrum_mz);
-              feature.setIntensity(spectrum_mz); // BBBB TODO check
-              feature.setMetaValue("transition_name", peptide_ref);
-              ms2_features.push_back(feature);
+              Feature ms2_feature;
+              ms2_feature.setRT(spectrum_rt);
+              ms2_feature.setMZ(spectrum_mz);
+              ms2_feature.setIntensity(subordinate.getIntensity());
+              ms2_feature.setMetaValue("transition_name", peptide_ref);
+              ms2_features.push_back(ms2_feature);
             }
+            // ===================================================
+            ms2_features_report.push_back(&subordinate);
+            // ===================================================
           }
         }
       }
+      // ===================================================
+      std::cout << "Spectrum mz: " << spectrum_mz << ", rt: " << spectrum_rt;
+      if (ms2_features_report.empty())
+      {
+        std::cout << " -> no match" << std::endl;
+      }
+      else
+      {
+        std::cout << std::endl;
+        for (const auto& feature : ms2_features_report)
+        {
+          const double target_mz = feature->getMZ();
+          const double target_rt = feature->getRT();
+          std::cout << " -> mz: " << target_mz << ", rt: " << target_rt << " " << feature->getMetaValue("PeptideRef") << std::endl;
+        }
+      }
+      // ===================================================
     }
   }
 

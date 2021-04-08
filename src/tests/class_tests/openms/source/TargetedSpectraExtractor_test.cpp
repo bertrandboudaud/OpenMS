@@ -1059,7 +1059,8 @@ START_SECTION(storeSpectra(const String& filename, MSExperiment& experiment) con
   {
     MSSpectrum picked_spectrum;
     targeted_spectra_extractor.pickSpectrum(spectrum, picked_spectrum);
-    // name = to write msp file (debug) we need a name, which is missing -----------
+    // -----------------------------------------------------------------------------
+    // name = to write msp file (debug) we need a name, which is missing
     if (picked_spectrum.getName().empty())
     {
       static int debug_name_counter = 0;

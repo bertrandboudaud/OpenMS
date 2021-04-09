@@ -263,12 +263,11 @@ namespace OpenMS
           const auto& peptide_ref = subordinate.getMetaValue("PeptideRef");
           const double target_mz = subordinate.getMZ();
           const double target_rt = subordinate.getRT();
-          if (target_rt >= rt_left_lim && target_rt <= rt_right_lim &&
-              target_mz >= mz_left_lim && target_mz <= mz_right_lim)
+          if (target_rt >= rt_left_lim && target_rt <= rt_right_lim)
           {
-            // std::cout << "annotateSpectra(): " << peptide_ref << "]";
-            // std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
-            //          << std::endl;
+            std::cout << "annotateSpectra(): " << peptide_ref << "]";
+            std::cout << " (target_rt: " << target_rt << ") (target_mz: " << target_mz << ")" << std::endl
+                      << std::endl;
             MSSpectrum annotated_spectrum = spectrum;
             annotated_spectrum.setName(peptide_ref);
             annotated_spectra.push_back(annotated_spectrum);
@@ -288,6 +287,7 @@ namespace OpenMS
           }
         }
       }
+      /*
       // ===================================================
       std::cout << "Spectrum mz: " << spectrum_mz << ", rt: " << spectrum_rt;
       if (ms2_features_report.empty())
@@ -305,6 +305,7 @@ namespace OpenMS
         }
       }
       // ===================================================
+      */
     }
   }
 

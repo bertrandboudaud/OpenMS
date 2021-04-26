@@ -524,7 +524,7 @@ private:
 
     bool deisotoping_use_deisotoper_;
     double deisotoping_fragment_tolerance_;
-    String deisotoping_fragment_unit_;
+    std::string deisotoping_fragment_unit_;
     int deisotoping_min_charge_;
     int deisotoping_max_charge_;
     int deisotoping_min_isopeaks_;
@@ -538,6 +538,6 @@ private:
     double precursor_mz_distance_;
     double consensus_spectrum_precursor_rt_tolerance_;
 
-    String method_;
+    std::string method_;
   };
 }

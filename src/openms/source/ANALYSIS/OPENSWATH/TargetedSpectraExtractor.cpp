@@ -191,7 +191,7 @@ namespace OpenMS
     params.setValue("deisotoping:use_deisotoper", "false", "Use Deisotoper (if no fragment annotation is used)");
     params.setValue("deisotoping:fragment_tolerance", 1.0, "Tolerance used to match isotopic peaks");
     params.setValue("deisotoping:fragment_unit", "ppm", "Unit of the fragment tolerance");
-    params.setValidStrings("deisotoping:fragment_unit", ListUtils::create<String>("ppm,Da"));
+    params.setValidStrings("deisotoping:fragment_unit", {"ppm,Da"});
     params.setValue("deisotoping:min_charge", 1, "The minimum charge considered");
     params.setMinInt("deisotoping:min_charge", 1);
     params.setValue("deisotoping:max_charge", 1, "The maximum charge considered");
@@ -210,7 +210,7 @@ namespace OpenMS
     params.setValue("consensus_spectrum_precursor_rt_tolerance", 5, "Tolerance window (left and right) for precursor selection [seconds], for consensus spectrum generation (only available without fragment annotation)");
 
     params.setValue("method", "highest_intensity", "Spectrum with the highest precursor intensity or a consensus spectrum ist used for assay library construction (if no fragment annotation is used).");
-    params.setValidStrings("method", ListUtils::create<String>("highest_intensity,consensus_spectrum"));
+    params.setValidStrings("method", {"highest_intensity,consensus_spectrum"});
   }
 
   /*

@@ -521,6 +521,7 @@ private:
     int transition_threshold_;
     double min_fragment_mz_;
     double max_fragment_mz_;
+    double relative_allowable_product_mass_;
 
     bool deisotoping_use_deisotoper_;
     double deisotoping_fragment_tolerance_;

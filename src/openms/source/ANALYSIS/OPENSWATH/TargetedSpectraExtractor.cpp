@@ -91,6 +91,7 @@ namespace OpenMS
     transition_threshold_ = param_.getValue("transition_threshold");
     min_fragment_mz_ = (double) param_.getValue("min_fragment_mz");
     max_fragment_mz_ = (double) param_.getValue("max_fragment_mz");
+    relative_allowable_product_mass_ = (double) param_.getValue("relative_allowable_product_mass");
 
     deisotoping_use_deisotoper_ = param_.getValue("deisotoping:use_deisotoper").toBool();
     deisotoping_fragment_tolerance_ = (double) param_.getValue("deisotoping:fragment_tolerance");
@@ -187,11 +188,12 @@ namespace OpenMS
     params.setValue("transition_threshold", 5, "Further transitions need at least x% of the maximum intensity (default 5%)");
     params.setValue("min_fragment_mz", 0.0, "Minimal m/z of a fragment ion choosen as a transition");
     params.setValue("max_fragment_mz", 2000.0, "Maximal m/z of a fragment ion choosen as a transition");
+    params.setValue("relative_allowable_product_mass", 10.0, "Threshold m/z of a product relatively to the precurosor m/z (can be negative)");
 
     params.setValue("deisotoping:use_deisotoper", "false", "Use Deisotoper (if no fragment annotation is used)");
     params.setValue("deisotoping:fragment_tolerance", 1.0, "Tolerance used to match isotopic peaks");
     params.setValue("deisotoping:fragment_unit", "ppm", "Unit of the fragment tolerance");
-    params.setValidStrings("deisotoping:fragment_unit", {"ppm,Da"});
+    params.setValidStrings("deisotoping:fragment_unit", {"ppm","Da"});
     params.setValue("deisotoping:min_charge", 1, "The minimum charge considered");
     params.setMinInt("deisotoping:min_charge", 1);
     params.setValue("deisotoping:max_charge", 1, "The maximum charge considered");
@@ -210,7 +212,7 @@ namespace OpenMS
     params.setValue("consensus_spectrum_precursor_rt_tolerance", 5, "Tolerance window (left and right) for precursor selection [seconds], for consensus spectrum generation (only available without fragment annotation)");
 
     params.setValue("method", "highest_intensity", "Spectrum with the highest precursor intensity or a consensus spectrum ist used for assay library construction (if no fragment annotation is used).");
-    params.setValidStrings("method", {"highest_intensity,consensus_spectrum"});
+    params.setValidStrings("method", {"highest_intensity","consensus_spectrum"});
   }
 
   /*
@@ -862,7 +864,6 @@ namespace OpenMS
       std::string peptide_ref = ms1_feature.getMetaValue("PeptideRef");
       OpenMS::TargetedExperiment::Peptide peptide;
       peptide.id = peptide_ref;
-      int precursor_charge = 1;
       peptide.setChargeState(ms1_feature.getCharge());
       peptide.addMetaValues(ms1_feature);
       peptides.push_back(peptide);
@@ -870,30 +871,35 @@ namespace OpenMS
       // why peptides and not compound ?
       for (const auto& ms2_feature : ms1_to_ms2[peptide_ref])
       {
-        std::string native_id = ms2_feature->getMetaValue("native_id");
-        OpenMS::ReactionMonitoringTransition rmt;
-        //rmt.setCompoundRef(peptide_ref);
-        //rmt.setCVTerms()
-        //rmt.setDecoyTransitionType()
-        //rmt.setDetectingTransition()
-        //rmt.setIdentifyingTransition()
-        //rmt.setIntermediateProducts()
-        rmt.setLibraryIntensity(ms1_feature.getIntensity());
-        //rmt.setMetaValue();
-        rmt.setName(ms2_feature->getMetaValue("native_id"));
-        std::ostringstream os;
-        os << ms2_feature->getMetaValue("native_id") << "_" << peptide_ref;
-        rmt.setNativeID(os.str());
-        rmt.setPeptideRef(peptide_ref);
-        //rmt.setPrecursorCVTermList()
-        rmt.setPrecursorMZ(ms1_feature.getMZ());
-        //rmt.setPrediction()
-        //rmt.setProduct()
-        rmt.setProductMZ(ms2_feature->getMZ());
-        //rmt.setQuantifyingTransition()
-        //rmt.setRetentionTime(ms2_feature->getPosition().getX());
-        rmt.addMetaValues(*ms2_feature);
-        v_rmt_all.push_back(rmt);
+        auto current_mz = ms2_feature->getMZ();
+        if ((current_mz > min_fragment_mz_ && current_mz < max_fragment_mz_) &&
+            (current_mz < ms1_feature.getMZ() + relative_allowable_product_mass_))
+        {
+          std::string native_id = ms2_feature->getMetaValue("native_id");
+          OpenMS::ReactionMonitoringTransition rmt;
+          //rmt.setCompoundRef(peptide_ref);
+          //rmt.setCVTerms()
+          //rmt.setDecoyTransitionType()
+          //rmt.setDetectingTransition()
+          //rmt.setIdentifyingTransition()
+          //rmt.setIntermediateProducts()
+          rmt.setLibraryIntensity(ms1_feature.getIntensity());
+          //rmt.setMetaValue();
+          rmt.setName(ms2_feature->getMetaValue("native_id"));
+          std::ostringstream os;
+          os << ms2_feature->getMetaValue("native_id") << "_" << peptide_ref;
+          rmt.setNativeID(os.str());
+          rmt.setPeptideRef(peptide_ref);
+          //rmt.setPrecursorCVTermList()
+          rmt.setPrecursorMZ(ms1_feature.getMZ());
+          //rmt.setPrediction()
+          //rmt.setProduct()
+          rmt.setProductMZ(ms2_feature->getMZ());
+          //rmt.setQuantifyingTransition()
+          //rmt.setRetentionTime(ms2_feature->getPosition().getX());
+          rmt.addMetaValues(*ms2_feature);
+          v_rmt_all.push_back(rmt);
+        }
       }
     }
 
